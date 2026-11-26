@@ -1,0 +1,24 @@
+{
+  "assess": {
+    "finishLineRounds": 0,
+    "signoffRounds": 0,
+    "totalCalls": 2,
+    "totalHours": 1,
+    "seatCallMinutes": 15,
+    "mergeRounds": 0,
+    "seatCallsPerConsultation": 0,
+    "consultationsPerTask": 0,
+    "inlineMaterialMaxBytes": 153600
+  },
+  "standard": {
+    "finishLineRounds": 2,
+    "signoffRounds": 3,
+    "totalCalls": 15,
+    "totalHours": 4,
+    "seatCallMinutes": 45,
+    "mergeRounds": 2,
+    "seatCallsPerConsultation": 6,
+    "consultationsPerTask": 3,
+    "inlineMaterialMaxBytes": 153600
+  }
+}

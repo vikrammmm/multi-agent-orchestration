@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "merge draft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "unified_feedback", "dropped", "disputed"],
+  "properties": {
+    "phase": { "type": "string", "enum": ["merge"] },
+    "unified_feedback": { "type": "string" },
+    "dropped": { "type": "array", "items": { "type": "string" } },
+    "disputed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["point", "seat_a", "seat_b"],
+        "properties": { "point": { "type": "string" }, "seat_a": { "type": "string" }, "seat_b": { "type": "string" } }
+      }
+    }
+  }
+}

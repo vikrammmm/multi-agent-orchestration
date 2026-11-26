@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "sign-off verdict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "verdict", "blocking", "later", "summary"],
+  "properties": {
+    "phase": { "type": "string", "enum": ["signoff"] },
+    "verdict": { "type": "string", "enum": ["DONE", "NOT_DONE"] },
+    "blocking": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["checklist_line", "defect", "evidence"],
+        "properties": {
+          "checklist_line": { "type": ["integer", "null"] },
+          "defect": { "type": "string" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "later": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" }
+  }
+}

@@ -1,0 +1,28 @@
+{
+ "schema": 1,
+ "release": "f7f814c9d3b8",
+ "commissioned": [
+  "auto|default",
+  "claude-haiku-5-5|high",
+  "claude-haiku-5-5|low",
+  "claude-opus-5-5|xhigh",
+  "claude-sonnet-5-5|high",
+  "claude-sonnet-5-5|low",
+  "claude-sonnet-5-5|max",
+  "claude-sonnet-5-5|medium",
+  "claude-sonnet-5-5|xhigh",
+  "gpt-6-luna|high",
+  "gpt-6-luna|max",
+  "gpt-6-luna|medium",
+  "gpt-6.1-sol|high",
+  "gpt-6.1-sol|medium",
+  "gpt-6.1-sol|xhigh",
+  "grok-4.7|high",
+  "grok-4.7|low",
+  "grok-4.7|xhigh",
+  "muse-spark-1.3|xhigh",
+  "muse-wonder-1.0|max",
+  "muse-wonder-full-1.0|max",
+  "qwen-local|high"
+ ]
+}

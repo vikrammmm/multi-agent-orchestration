@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "note": "Team packet only. For each lane in delegate-lanes.json, the models the installer's machine check tries next, in order, when the person's CLI does not offer the lane's own model. Lanes not listed have no fallback. Keep tiers: a fallback may be one tier lower than the first choice only where the lane's job allows it (see PACKET-SPEC section 3.3).",
+  "lanes": {
+    "codex-review": [
+      { "model": "gpt-6.1-sol", "effort": "high" }, { "model": "gpt-6-sol", "effort": "high" }, { "model": "gpt-5.6-sol", "effort": "high" } ],
+    "codex-implement": [
+      { "model": "gpt-6.1-sol", "effort": "high" }, { "model": "gpt-6-sol", "effort": "high" }, { "model": "gpt-5.6-terra", "effort": "max" } ],
+    "codex-bulk": [ { "model": "gpt-5.6-luna", "effort": "max" } ],
+    "codex-luna-implement": [ { "model": "gpt-5.6-luna", "effort": "max" } ],
+    "codex-luna-review": [ { "model": "gpt-5.6-luna", "effort": "max" } ],
+    "cursor-grok-implement": [ { "model": "cursor-grok-4.6-xhigh-fast" } ],
+    "cursor-grok-review": [ { "model": "cursor-grok-4.6-xhigh-fast" } ]
+  }
+}

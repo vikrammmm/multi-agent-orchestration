@@ -1,0 +1,11 @@
+# Only the installer and its sources are published. Everything else in this folder stays private.
+/*
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/delegation-team-packet/
+!/src/
+
+# Left behind by test and build runs
+Microsoft/
+node_modules/

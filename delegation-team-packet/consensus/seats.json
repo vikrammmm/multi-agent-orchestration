@@ -1,0 +1,95 @@
+{
+  "version": 6,
+  "assessorOrder": ["gpt-6-luna", "claude-sonnet-5.5", "claude-sonnet-4.6"],
+  "assessment": { "trial": true, "trialTasks": 20, "since": "2026-09-28" },
+  "preferenceOrder": ["gpt-6.2-sol", "claude-opus-5.5", "claude-opus", "grok-4.7", "gpt-6.1-sol", "gpt-6-sol", "claude-sonnet-5", "grok-4.6", "gpt-5.6-sol"],
+  "consultDraftingSeat": ["claude-opus-5.5", "claude-opus"],
+  "retired": {
+    "gpt-astra": "GPT-6 Astra, replaced completely by GPT-6.1 Sol (seat gpt-6.1-sol).",
+    "claude-fable": "Claude Fable 5.1, replaced completely by Claude Opus 5.5 (seat claude-opus-5.5)."
+  },
+  "selectionRule": "A pair is always two different models (never the same model identity). Automatic picks rank usable seats by tier (CTO first), then a different vendor from the partner seat, then a different family, then this preferenceOrder. Two CTOs from different vendors are standard grade; two CTOs from one vendor are lower grade (single vendor); any seat below CTO makes the pair lower grade (below CTO level); one seat alone is a single reviewer, never a consensus. GPT-6.2 Sol is the primary GPT seat, GPT-6.1 Sol its tier 1 reserve, and Opus 5.5 the primary Claude seat.",
+  "seats": {
+    "gpt-6.2-sol": {
+      "vendor": "OpenAI", "route": "codex", "model": "gpt-6.2-sol", "effort": "xhigh",
+      "family": "sol", "label": "GPT-6.2 Sol at xhigh",
+      "tier": 1, "lock": "firm", "chairEligible": true, "seatEligible": true, "sandbox": "read-only", "serviceTier": "default",
+      "note": "Primary GPT seat (CTO at xhigh or above, Tech lead at high)."
+    },
+    "gpt-6.1-sol": {
+      "vendor": "OpenAI", "route": "codex", "model": "gpt-6.1-sol", "effort": "xhigh",
+      "family": "sol", "label": "GPT-6.1 Sol at xhigh",
+      "tier": 1, "lock": "firm", "chairEligible": true, "seatEligible": true, "reserve": true, "sandbox": "read-only", "serviceTier": "default",
+      "note": "Reserve: the GPT co-CTO where Codex does not offer GPT-6.2 Sol."
+    },
+    "grok-4.7": {
+      "vendor": "xAI", "route": "cursor", "model": "grok-4.7-xhigh", "effort": "xhigh",
+      "family": "grok", "label": "Grok 4.7 at xhigh",
+      "tier": 1, "lock": "copy", "chairEligible": true, "seatEligible": true, "mode": "plan",
+      "note": "Backup seat: trusted as a CTO at its highest offered setting (xhigh; no max is offered). Runs in a disposable copy of the project."
+    },
+    "claude-opus-5.5": {
+      "vendor": "Anthropic", "route": "claude-code", "model": "claude-opus-5-5", "effort": "xhigh",
+      "family": "opus", "label": "Claude Opus 5.5 at xhigh",
+      "tier": 1, "lock": "firm", "chairEligible": true, "seatEligible": true, "maxBudgetUsd": 50,
+      "minVersion": "2.1.280",
+      "note": "First-choice Claude seat. Claude Opus 5.5 is a CTO at high effort or above; the seat runs at xhigh, with high also allowed."
+    },
+    "claude-opus": {
+      "vendor": "Anthropic", "route": "claude-code", "model": "claude-opus-5", "effort": "xhigh",
+      "family": "opus", "label": "Claude Opus 5 at xhigh",
+      "tier": 1, "lock": "firm", "chairEligible": true, "seatEligible": true, "reserve": true, "maxBudgetUsd": 50,
+      "note": "Reserve Claude seat: drafts and reviews where Claude Code is older than 2.1.280 and pairs with Opus 5.5 on Claude-only machines. Runs at xhigh."
+    },
+    "gpt-6-sol": {
+      "vendor": "OpenAI", "route": "codex", "model": "gpt-6-sol", "effort": "xhigh",
+      "family": "sol", "label": "GPT-6 Sol at xhigh",
+      "tier": 2, "lock": "firm", "chairEligible": true, "seatEligible": true, "sandbox": "read-only", "serviceTier": "default", "fallback": true,
+      "note": "Fallback seat below CTO level (Tech lead). Picked only when no CTO-level partner is usable; the task is then labelled lower grade."
+    },
+    "claude-sonnet-5": {
+      "vendor": "Anthropic", "route": "claude-code", "model": "claude-sonnet-5", "effort": "xhigh",
+      "family": "sonnet", "label": "Claude Sonnet 5 at xhigh",
+      "tier": 2, "lock": "firm", "chairEligible": true, "seatEligible": true, "maxBudgetUsd": 50, "fallback": true,
+      "note": "Fallback seat below CTO level (Tech lead at xhigh). Picked only when no CTO-level partner is usable; the task is then labelled lower grade."
+    },
+    "grok-4.6": {
+      "vendor": "xAI", "route": "cursor", "model": "cursor-grok-4.6-xhigh", "effort": "xhigh",
+      "family": "grok", "label": "Grok 4.6 at xhigh",
+      "tier": 2, "lock": "copy", "chairEligible": true, "seatEligible": true, "mode": "plan", "fallback": true,
+      "note": "Fallback seat below CTO level (Tech lead), for Cursor plans without Grok 4.7. Runs in a disposable copy of the project, like grok-4.7."
+    },
+    "gpt-5.6-sol": {
+      "vendor": "OpenAI", "route": "codex", "model": "gpt-5.6-sol", "effort": "xhigh",
+      "family": "sol", "label": "GPT-5.6 Sol at xhigh",
+      "tier": 2, "lock": "firm", "chairEligible": true, "seatEligible": true, "sandbox": "read-only", "serviceTier": "default", "fallback": true,
+      "note": "Fallback seat below CTO level (Tech lead), for Codex versions or plans without GPT-6."
+    }
+  },
+  "assessors": {
+    "gpt-6-luna": {
+      "vendor": "OpenAI", "route": "codex", "model": "gpt-6-luna", "effort": "high",
+      "family": "luna", "label": "GPT-6 Luna at high", "tier": 3, "sandbox": "read-only",
+      "serviceTier": "default", "strictFlags": true,
+      "note": "Task-sizing assessor (trial): the cheapest model the rules allow to make a judgement call (Developer tier). Never a consensus seat."
+    },
+    "claude-sonnet-5.5": {
+      "vendor": "Anthropic", "route": "claude-code", "model": "claude-sonnet-5-5", "effort": "high",
+      "family": "sonnet", "label": "Claude Sonnet 5.5 at high", "tier": 3,
+      "minVersion": "2.1.284", "maxBudgetUsd": 5, "strictFlags": true,
+      "note": "Assessor fallback where Codex is missing: Sonnet 5.5 at high effort requires Claude Code 2.1.284 or later. Never a consensus seat."
+    },
+    "claude-sonnet-4.6": {
+      "vendor": "Anthropic", "route": "claude-code", "model": "claude-sonnet-4-6", "effort": "high",
+      "family": "sonnet", "label": "Claude Sonnet 4.6 at high", "tier": 3,
+      "maxBudgetUsd": 5, "strictFlags": true,
+      "note": "Last assessor fallback: where Codex is missing and Claude Code is older than 2.1.284. Never a consensus seat."
+    }
+  },
+  "routes": {
+    "claude-code": { "binary": "claude", "windowsLauncher": "exe", "minVersion": "2.1.248", "readOnlyLock": "tool allow-list (Read, Glob, Grep), restricted mode (Claude Code 2.1.248 or later), empty strict MCP config" },
+    "codex": { "binary": "codex", "windowsLauncher": "cmd", "readOnlyLock": "read-only sandbox" },
+    "cursor": { "binary": "cursor-agent", "windowsLauncher": "cmd", "readOnlyLock": "plan mode inside a disposable copy of the project, integrity manifest before and after" }
+  },
+  "apiKeyEnvToStrip": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CURSOR_API_KEY", "XAI_API_KEY", "MUSE_API_KEY"]
+}

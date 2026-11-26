@@ -1,0 +1,72 @@
+# Device profile: team install
+
+Rendered by the delegation team packet installer on {{DATE}} (packet {{PACKET_VERSION}}) for this
+machine. This file records nonsecret local facts only; the rules are in `POLICY.md` next to it.
+Re-running the installer refreshes it.
+
+## This machine
+
+- OS: {{OS}}
+- Home: `{{HOME}}`
+- Claude Code: {{CLAUDE_VERSION}}
+- Node: {{NODE_VERSION}}
+- Codex CLI: {{CODEX_VERSION}}
+- Cursor Agent: {{CURSOR_VERSION}}
+- Muse Code: {{MUSE_VERSION}}
+
+{{ENTRY}}
+
+## Repositories and other tools
+
+{{REPOS}}
+
+{{FOLDERS}}
+
+Work in one repository at a time: point a relay's `--cd` or a consensus `--project` at a single
+repository inside that folder, never at the folder itself.
+
+Other tools found here (usable directly; no relay or lane):
+
+{{OTHER_TOOLS}}
+
+## Routes available here
+
+{{ROUTES}}
+
+{{LADDER}}
+
+Only these routes exist on this machine. Work that the policy would send to a route that is not
+listed goes to the next listed route in the rulebook's cheapest-first order that can do it, and
+to the Claude helpers (the Haiku helper first, then the Sonnet helpers; or it stays with the
+orchestrator) only when none can. Nothing here is a
+substitute for the routes' own logins: each tool must be logged in with a subscription account.
+
+## Lanes on this machine
+
+The installer checked which models this machine's tools offer and chose, for each lane, the first
+model the tool actually has (the owner's first choice, then the listed fallbacks):
+
+{{LANES}}
+
+A lane marked "not verified" could not be checked (for example Codex had not been opened yet); if a
+dispatch on it fails because the model is not offered, follow the rulebook's "When a model is
+missing" rule and run the installer again after fixing the tool.
+
+## Consensus mode on this machine
+
+{{CONSENSUS}}
+
+- Referee: `{{RUNTIME}}`
+- Ledger: `{{LEDGER}}`
+- Re-check the seats at any time without spending tokens: `node "{{RUNTIME}}" doctor --human`
+
+## Rules that apply to every route
+
+- Every tool runs on its subscription login. API keys are banned. Never set, store or ask for one.
+- The helper definitions in `~/.claude/agents/` bill the Claude plan of the person logged in:
+  haiku-helper pins Claude Haiku 5.5 at effort max (Claude Code 2.1.293 or newer); explore,
+  researcher, implementer and verifier pin Claude Sonnet 5.5 at effort high (Claude Code 2.1.284
+  or newer; on an older Claude Code the installer puts in the previous copies, Claude Sonnet 4.6 at
+  effort max, and the Routes section above says so).
+- To update or remove this install, run the packet's installer again (`--uninstall` to undo). Do
+  not edit the installed files by hand; ask the packet owner for a newer packet instead.

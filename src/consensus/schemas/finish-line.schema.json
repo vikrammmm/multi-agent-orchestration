@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "finish-line verdict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "verdict", "objections", "checklist_additions", "worker_jobs_requested", "later", "summary"],
+  "properties": {
+    "phase": { "type": "string", "enum": ["finish-line"] },
+    "verdict": { "type": "string", "enum": ["AGREE", "OBJECT"] },
+    "objections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "item", "problem", "proposed_fix"],
+        "properties": {
+          "target": { "type": "string", "enum": ["goal", "plan", "checklist"] },
+          "item": { "type": "string" },
+          "problem": { "type": "string" },
+          "proposed_fix": { "type": "string" }
+        }
+      }
+    },
+    "checklist_additions": { "type": "array", "items": { "type": "string" } },
+    "worker_jobs_requested": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["what", "why"],
+        "properties": { "what": { "type": "string" }, "why": { "type": "string" } }
+      }
+    },
+    "later": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" }
+  }
+}

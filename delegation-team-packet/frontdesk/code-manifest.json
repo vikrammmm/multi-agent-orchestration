@@ -1,0 +1,23 @@
+{
+ "schema": 1,
+ "version": "0.1.7",
+ "files": {
+  "role.mjs": "512ba22dc308e91deec64ebcc0304e83ca8acbdb714015311e8b4c50ec3399e8",
+  "hook.mjs": "aca9e953687caf7ac1a1cd07841527b1895afc61637f98e27f6d4876709db848",
+  "VERSION": "ba57e7c7f71876d645bcdd9fb070f2dea8e6db5ed284a7e3d85c6b7d2409fef1",
+  "lib/paths.mjs": "f9708a00984941cf8083fdbf92c2f4ea21676ebb7dcf51a2b1aa96d9fcb37145",
+  "lib/fsx.mjs": "f1cfd2c30a64181e9fea313a4bc724f9f2b4fd6e1c5080d5a2f68faa1ea13a4b",
+  "lib/generation.mjs": "019d24c189fd5662778fbfa7fc35e69a267d920f23d0ae76b5b67e3d895d9207",
+  "lib/receipts.mjs": "5dd456fad38061800557fc2b8bd2e02e434b40ef7c3232e60f74af40dd33090b",
+  "lib/tools.mjs": "049c801ca19b88b255052ed666b33ffe4ee695f6e72e7e8a0bd67de82061df2a",
+  "lib/eligible.mjs": "31e946065da3ebfa718e567296589c633b8c2b247490fd6b53ad7fcbb47ef6fc",
+  "lib/guard.mjs": "473304774f088da6062703494db7936977ade39c45d77a8993033dfb4e8e9d96",
+  "lib/hooklog.mjs": "b74a6a5afd9485d36eefff67c70827f3c79c907d21519602f68dc02cc1595812",
+  "lib/names.mjs": "1034b140c6a4ef525ecf14a85d5a6d1094db8ebbe8ec51394cc5f20e68e866cb",
+  "lib/splice.mjs": "132c696c8d6d6b1f1c1b3502e9cfa76681f56b85523d797cadea1a12fa3f469b",
+  "lib/audit-logs.mjs": "f2be10b431109b591387a189dac8f3a20e77e4450e8c289838406d79adc493bd",
+  "lib/samefile.mjs": "8b1d3f14d68466cd257b22e034fb0d12c666121011f54931cb406a3d478193c6",
+  "lib/tomlcheck.mjs": "e792ef1bed5b13986e60a6fe020363d856cfe035f2c486571ad3932733ac30c0",
+  "install-frontdesk.mjs": "847a8ddcf1730cb8b208505f00080de26f76d6f5880c3875b4bbfe62cc17e609"
+ }
+}

@@ -1,0 +1,70 @@
+{
+  "version": "delegate-fleet.v1",
+  "lanes": {
+    "codex-review": {
+      "implementer": "codex",
+      "model": "gpt-6.2-sol",
+      "effort": "high",
+      "readOnly": true,
+      "timeout": "45m"
+    },
+    "codex-implement": {
+      "implementer": "codex",
+      "model": "gpt-6.2-sol",
+      "effort": "high",
+      "sandbox": "workspace-write",
+      "timeout": "2h"
+    },
+    "codex-bulk": {
+      "implementer": "codex",
+      "model": "gpt-6-luna",
+      "effort": "max",
+      "sandbox": "workspace-write",
+      "timeout": "1h"
+    },
+    "cursor-review": {
+      "implementer": "cursor",
+      "readOnly": true,
+      "timeout": "45m",
+      "model": "grok-4.7-high"
+    },
+    "cursor-grok-implement": {
+      "implementer": "cursor",
+      "model": "grok-4.7-xhigh-fast",
+      "timeout": "2h"
+    },
+    "cursor-grok-review": {
+      "implementer": "cursor",
+      "model": "grok-4.7-xhigh-fast",
+      "readOnly": true,
+      "timeout": "45m"
+    },
+    "codex-luna-implement": {
+      "implementer": "codex",
+      "model": "gpt-6-luna",
+      "effort": "max",
+      "sandbox": "workspace-write",
+      "timeout": "2h"
+    },
+    "codex-luna-review": {
+      "implementer": "codex",
+      "model": "gpt-6-luna",
+      "effort": "max",
+      "readOnly": true,
+      "timeout": "45m"
+    },
+    "muse-implement": {
+      "implementer": "muse",
+      "model": "muse-spark-1.3",
+      "effort": "xhigh",
+      "timeout": "2h"
+    },
+    "muse-review": {
+      "implementer": "muse",
+      "model": "muse-spark-1.3",
+      "effort": "xhigh",
+      "readOnly": true,
+      "timeout": "45m"
+    }
+  }
+}

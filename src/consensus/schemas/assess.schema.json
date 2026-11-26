@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "task-sizing assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "rating", "suggest_consensus", "suggested_tier", "confidence", "danger_hits", "expected_files", "unknowns", "architectural", "reasons", "files_read", "summary"],
+  "properties": {
+    "phase": { "type": "string", "enum": ["assess"] },
+    "rating": { "type": "string", "enum": ["simple", "moderate", "complex"] },
+    "suggest_consensus": { "type": "boolean" },
+    "suggested_tier": { "type": "string", "enum": ["junior", "developer", "tech-lead", "cto"] },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+    "danger_hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "where"],
+        "properties": {
+          "category": { "type": "string", "enum": ["money", "security", "personal-data", "production", "irreversible"] },
+          "where": { "type": "string" }
+        }
+      }
+    },
+    "expected_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "why"],
+        "properties": { "path": { "type": "string" }, "why": { "type": "string" } }
+      }
+    },
+    "unknowns": { "type": "array", "items": { "type": "string" } },
+    "architectural": { "type": "boolean" },
+    "reasons": { "type": "array", "items": { "type": "string" } },
+    "files_read": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" }
+  }
+}

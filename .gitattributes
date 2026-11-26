@@ -1,0 +1,2 @@
+# The installer checks every file against CHECKSUMS.txt, so files must arrive byte for byte.
+* -text

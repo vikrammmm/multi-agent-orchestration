@@ -1,0 +1,46 @@
+{
+ "schema": 1,
+ "compat": {
+  "minReader": 1,
+  "maxReader": 1
+ },
+ "generation": 5,
+ "release": "f7f814c9d3b8",
+ "time": "2026-10-16T18:54:58.154Z",
+ "publisher": {
+  "machine": "publisher",
+  "user": "publisher",
+  "node": "v22.11.0"
+ },
+ "source": {
+  "inputsHash": "9899fc16309ffd049c87772e4383352b51241eff0971fcfe078cd4731476c2d8",
+  "aaFile": "aa-intelligence.txt",
+  "catalogHash": "23075a94a942147e7e1bc00d6e3ec9820284b5a1e0251e8531dfb59a3a7adcd4",
+  "counts": {
+   "engineers": 95,
+   "commissioned": 24,
+   "decommissioned": 71,
+   "waitingForScore": 76,
+   "belowFloor": 12,
+   "placedByHand": 4,
+   "skippedRetiredOrBanned": {
+    "Retired": 31,
+    "Banned": 1
+   }
+  }
+ },
+ "installable": [
+  "ladder.json",
+  "guard-ctx.json",
+  "requirements.json",
+  "summary.md"
+ ],
+ "files": {
+  "releases/f7f814c9d3b8/ladder.json": "eee6091bcc9ba9b58c23b476d42dc97affc9d2ba1fdaee0c50c055ffa7d2f078",
+  "releases/f7f814c9d3b8/guard-ctx.json": "517779e41dea3d8d440404d2de9b4a2209b0b7a9cb6f951d631be29e9188ab6d",
+  "releases/f7f814c9d3b8/requirements.json": "da7de2d285261dd5fbe6a04021d5eb6f37b824f6c36170f5f54628d19451eacc",
+  "releases/f7f814c9d3b8/summary.md": "c562e5e5bc250c37a17404f546798a5a536d804ad1b67a2c43101de62db3e746",
+  "releases/f7f814c9d3b8/org-chart.html": "159d26c7786d8c6d6e8e2a6a2582a345cf141e03a4958d384396e58e94bb6e11",
+  "releases/f7f814c9d3b8/org-chart.artifact.html": "750413e1665f5b3efd3200b10a629659db9201cfb35529e944b9202854fd44e2"
+ }
+}

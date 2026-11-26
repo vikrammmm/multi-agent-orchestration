@@ -1,0 +1,44 @@
+{
+ "requirements": {
+  "version": 1,
+  "about": "Minimum tool versions, so the front desk skips a route whose tool is too old instead of failing (Haiku 5.5 needs Claude Code 2.1.293; Sonnet 5.5 needs 2.1.284; Opus 5.5 needs 2.1.280).",
+  "tools": {
+   "claude-code": {
+    "minVersion": "2.1.248"
+   },
+   "muse": {
+    "minVersion": "1.4.3"
+   }
+  },
+  "families": [
+   {
+    "family": "claude-haiku-5-5",
+    "route": "claude-code",
+    "minVersion": "2.1.293"
+   },
+   {
+    "family": "claude-sonnet-5-5",
+    "route": "claude-code",
+    "minVersion": "2.1.284"
+   },
+   {
+    "family": "claude-opus-5-5",
+    "route": "claude-code",
+    "minVersion": "2.1.280"
+   }
+  ]
+ },
+ "rules": {
+  "version": 1,
+  "about": "Standing rules about what an engineer may be used for, beyond the commission register. Entries are appended, never edited. 'mode' is review (read-only analysis and review) or implement (work that writes).",
+  "modeExclusions": [
+   {
+    "family": "auto",
+    "mode": "review",
+    "by": "assistant",
+    "date": null,
+    "reason": "Cursor Auto picks the model itself, so what would review the work is unknown. It may still implement."
+   }
+  ]
+ }
+}
