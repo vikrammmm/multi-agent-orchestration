@@ -80,23 +80,24 @@ version_ge() {
     else return 1; fi
 }
 
-# pkt_ge A B → 0 if A >= B  (packet version YYYY.MM.DD[-N])
+# pkt_ok V → 0 if V is a packet version (MAJOR.MINOR.PATCH, digits only, at most 9 digits a part)
+pkt_ok() {
+    case "$1" in ''|*[!0-9.]*|.*|*.|*..*|*.*.*.*) return 1 ;; esac
+    case "$1" in *[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]*) return 1 ;; esac
+    case "$1" in *.*.*) return 0 ;; esac
+    return 1
+}
+
+# pkt_ge A B → 0 if A >= B  (packet version MAJOR.MINOR.PATCH). Any other shape (earlier packets
+# carried dated numbers) counts as older than every packet version.
 pkt_ge() {
-    local a="$1" b="$2"
-    local a_date a_n b_date b_n
-    a_date="${a%%-*}"; if [ "$a" != "$a_date" ]; then a_n="${a##*-}"; else a_n=0; fi
-    b_date="${b%%-*}"; if [ "$b" != "$b_date" ]; then b_n="${b##*-}"; else b_n=0; fi
-    local a_num b_num
-    a_num=$(printf '%s' "$a_date" | tr -d '.')
-    b_num=$(printf '%s' "$b_date" | tr -d '.')
-    case "$a_num" in *[!0-9]*) return 1 ;; esac
-    case "$b_num" in *[!0-9]*) return 1 ;; esac
-    case "$a_n"   in *[!0-9]*) a_n=0 ;; esac
-    case "$b_n"   in *[!0-9]*) b_n=0 ;; esac
-    if   [ "$a_num" -gt "$b_num" ] 2>/dev/null; then return 0
-    elif [ "$a_num" -lt "$b_num" ] 2>/dev/null; then return 1
-    elif [ "$a_n"  -ge "$b_n"  ] 2>/dev/null; then return 0
-    else return 1; fi
+    if ! pkt_ok "$1"; then
+        if pkt_ok "$2"; then return 1; fi
+        if [ "$1" = "$2" ]; then return 0; fi
+        return 1
+    fi
+    pkt_ok "$2" || return 0
+    version_ge "$1" "$2"
 }
 pkt_eq() { pkt_ge "$1" "$2" && pkt_ge "$2" "$1"; }
 pkt_gt() { pkt_ge "$1" "$2" && ! pkt_eq "$1" "$2"; }
@@ -1026,13 +1027,10 @@ fi
 
 # Version downgrade guard
 if [ "$PREV_RECEIPT_OURS" = "1" ] && [ -n "$PREV_PACKET_VERSION" ]; then
-    case "$PREV_PACKET_VERSION" in [0-9][0-9][0-9][0-9].*)
-        if pkt_gt "$PREV_PACKET_VERSION" "$PACKET_VERSION"; then
-            [ "$OPT_ALLOW_DOWNGRADE" = "0" ] && \
-                die2 "A newer packet ($PREV_PACKET_VERSION) is installed; this one is $PACKET_VERSION. Use the newer packet, or run again with --allow-downgrade."
-        fi
-        ;;
-    esac
+    if pkt_gt "$PREV_PACKET_VERSION" "$PACKET_VERSION"; then
+        [ "$OPT_ALLOW_DOWNGRADE" = "0" ] && \
+            die2 "A newer packet ($PREV_PACKET_VERSION) is installed; this one is $PACKET_VERSION. Use the newer packet, or run again with --allow-downgrade."
+    fi
 fi
 
 # ─── step 4: settings (unavailable models) ───────────────────────────────────

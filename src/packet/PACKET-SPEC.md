@@ -18,7 +18,7 @@ anything it overwrites or removes, can be re-run safely (idempotent) and can be 
 ```
 delegation-team-packet/
   README.md                        for the person installing: what it is, what you need, how to install
-  VERSION                          packet version, e.g. 2026.09.24-1
+  VERSION                          packet version, e.g. 1.0.0
   CHECKSUMS.txt                    "<sha256>  <relative path with forward slashes>" per file, all files except itself
   install.cmd                      Windows one-click: forwards to install.ps1 with -ExecutionPolicy Bypass
   install.ps1                      Windows installer (Windows PowerShell 5.1 and PowerShell 7)
@@ -100,7 +100,7 @@ Steps, in order:
    value) and go on. If `<home>/.config/muse/settings.json` (or `$XDG_CONFIG_HOME/muse/settings.json`
    when `XDG_CONFIG_HOME` is set and `<home>` is the user's own home, as Muse itself reads it) says
    `"contributor_mode_enabled": true`
-   (since 2026.11.10-1; the value may be on the line after its key), warn "WARNING: Muse contributor
+   (the value may be on the line after its key), warn "WARNING: Muse contributor
    mode is ON in <file>: ..." (Meta may train on what Muse is sent; banned for team work; switch it
    off in Muse) and go on. The installer only reads that file, never changes it, and does not need
    Muse to be found to warn. Whether the installed Muse relay protects its jobs is said in the
@@ -300,7 +300,7 @@ Steps, in order:
 14. **Summary**, in plain words: `Mode: desktop` or `Mode: server` and the model check's result on its own line ("Model check: done",
     "Model check: failed (<reason>); your previous reviewer and lane setup is kept unchanged", or
     "Model check: failed (<reason>); reviews are off until it succeeds", or "Model check: skipped
-    (no Node 18+)"); then (since 2026.11.10-1) the Muse contributor lines, from
+    (no Node 18+)"); then the Muse contributor lines, from
     `<home>/.claude/skills/muse-delegate/scripts/relay.mjs` as it is after this run (installed, updated, kept
     from before or the person's own): when it is byte-identical (SHA-256) to this packet's
     `skills/muse-delegate/scripts/relay.mjs` and the setting is on, the setting warning again with "The Muse
@@ -342,8 +342,9 @@ Steps, in order:
 
 ### 3.1 Packet versions
 
-A version is `YYYY.MM.DD` optionally followed by `-N`. Compare the date parts numerically, then
-`N` (missing `N` counts as 0). A receipt without `packetVersion` counts as older than any packet.
+A version is `MAJOR.MINOR.PATCH`: three numbers, digits only. Compare the parts numerically, left to
+right. A receipt without `packetVersion`, or with one of any other shape (earlier packets carried dated
+numbers), counts as older than any packet.
 
 ### 3.2 Machine check inputs
 
@@ -607,8 +608,9 @@ FAIL line per scenario and installer and exits non-zero on any failure.
     edits the first file the old receipt lists, mapping Git Bash receipt paths to Windows paths, so
     there is always one); receipt schema 2 with that `previousPacketVersion`; files only the old
     packet owned are removed when unchanged.
-18. downgrade guard: a receipt claiming packet `2099.01.01-1` stops with exit 2; with
-    `--allow-downgrade` the install proceeds and says "Downgrading".
+18. downgrade guard: a receipt claiming packet `99.0.0` stops with exit 2; with
+    `--allow-downgrade` the install proceeds and says "Downgrading". A receipt claiming a dated number
+    (`2099.01.01-1`) counts as older: the install proceeds and says "Upgrading from 2099.01.01-1 to".
 19. only the two Sol models (Claude Code 2.1.200; Codex list with `gpt-6-sol` and `gpt-5.6-sol`
     only): consensus `on, lower grade: below CTO level (gpt-6-sol + gpt-5.6-sol)`, note "same family".
 20. declared unavailable: Claude Code 2.1.280, `--unavailable claude-opus-5-5,claude-opus-5`,
@@ -676,7 +678,7 @@ Ladder scenarios (section 3.4), each for both installers:
     while `required` keeps `qwen-local`.
 36. `--uninstall` after 33 removes `frontdesk/` and `frontdesk-install.json`; the rest as scenario 5.
 38. upgrade from the previous packet zip: the ladder is installed on upgrade and owned (taken over
-    from a packet older than the ladder, kept from 2026.10.27-1 or later).
+    from a packet that had no ladder, kept from one that had it).
 39. dry runs on a fresh home and with a valid, a malformed and an unreadable front desk receipt: the whole home tree
     (backups included) is byte-identical.
 40. tampering: deleting `state/` files keeps `qwen-local` excluded; deleting `exclusions`, emptying both lists, removing
@@ -697,7 +699,7 @@ Ladder scenarios (section 3.4), each for both installers:
 46. packet-to-packet upgrade with an owned ladder: `Upgrading from`, still owned, `lastInstalled` names the new
     release and front desk, `required` keeps `qwen-local`.
 
-Agent scenarios (since 2026.10.27-1, section 3.5; both installers):
+Agent scenarios (section 3.5; both installers):
 
 47. Codex only, with Node: exit 0; no helper files and no `CLAUDE.md`; `.codex/AGENTS.md` has the section with no
     `{{`; the profile says Claude Code is not found and names the Codex entry; the ladder installs without hooks and
@@ -725,7 +727,7 @@ Agent scenarios (since 2026.10.27-1, section 3.5; both installers):
     file to point the agent at; `cursor-delegate` and both consensus skill copies installed; repeat UNCHANGED;
     `--uninstall` removes it all.
 
-Muse privacy scenarios (since 2026.11.10-1; both installers):
+Muse privacy scenarios (both installers):
 
 58. Muse found and `.config/muse/settings.json` with `"contributor_mode_enabled": true`: install and repeat print
     `WARNING: Muse contributor mode is ON`, and the summary says the installed relay switches it off for every job
@@ -791,7 +793,7 @@ requested one gives `modelWarning`; a Muse that refuses the flag fails with an u
 `contributorCheck: not_sent`, without the stop alarm, while stderr that only mentions the flag after Muse reported
 its model keeps `verified`.
 
-Harness isolation (since 2026.10.27-1): every scenario has its own `PATH`, `APPDATA` and `LOCALAPPDATA`; on Linux and
+Harness isolation: every scenario has its own `PATH`, `APPDATA` and `LOCALAPPDATA`; on Linux and
 macOS the system part of `PATH` is a scenario-local folder of links to the needed system commands without `node`, and
 no-Node scenarios assert that `node` is not found; the previous zip is extracted with `unzip`, `python3 -m zipfile -e`
 or `bsdtar` outside Windows; the ladder scenarios assert that every tool path `role.mjs` reports lies in the scenario's
@@ -801,11 +803,11 @@ Ubuntu machine is `node packet/tests/fixtures.mjs --packet <fresh unzip> --previ
 ## 6. Build
 
 `build-packet.ps1` stages the packet (section 2), copying `setup\` and `claude\lane-fallbacks.json`
-as well, and (since 2026.10.27-1) `frontdesk\` exactly as its code manifest lists it and the current ladder release
+as well, and `frontdesk\` exactly as its code manifest lists it and the current ladder release
 exactly as `ladder\manifest.json` lists its installable files, each copy verified against its manifest hash (a
 mismatch fails the build), and before zipping checks: every lane in `lane-fallbacks.json` exists in
 `delegate-lanes.json` and no fallback repeats its lane's first choice; `node --test` passes in the
-staged `consensus\` and `setup\`; (since 2026.11.10-1) the staged `muse-delegate` relay contains
+staged `consensus\` and `setup\`; the staged `muse-delegate` relay contains
 `"--contributor-mode", "off"` and `packet\tests\muse-relay.test.mjs` passes against it (gate "muse relay
 tests", `MUSE_RELAY` set to the staged relay); the fixture harness passes against the stage for both installers
 (unless `-SkipFixtures`, which the result line names; Git Bash is required, since without it the
@@ -813,5 +815,5 @@ harness could not test `install.sh`; the harness runs with `--jobs 8`, parallel 
 use their own temporary homes). Any failing or unrunnable gate stops the build with a
 non-zero exit and no `RESULT=BUILD PASS`. `-SkillsSource` names where the relay skills come from
 (default: the `skills` folder next to `packet`); the relay checks of v1 stay (the
-`DELEGATION_DISPATCHED` marker, no `--disable-sandbox`, MIT license). Since 2026.10.06-2 the
+`DELEGATION_DISPATCHED` marker, no `--disable-sandbox`, MIT license). The
 helper definitions come from `packet\claude\agents\`, alongside the packet's own rulebook and bootstrap.

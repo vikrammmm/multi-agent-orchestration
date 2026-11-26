@@ -144,11 +144,11 @@ function Compare-SemVer {
 
 function Compare-PacketVersion {
     param([string]$A, [string]$B)
-    # Returns -1 (A<B), 0 (A=B), 1 (A>B). Format: YYYY.MM.DD[-N]
+    # Returns -1 (A<B), 0 (A=B), 1 (A>B). Format: MAJOR.MINOR.PATCH. Any other shape (earlier packets carried
+    # dated numbers) counts as older than every MAJOR.MINOR.PATCH version.
     function Parse-PV($v) {
-        if ($v -match '^(\d{4})\.(\d{2})\.(\d{2})(?:-(\d+))?$') {
-            $n = if ($Matches[4]) { [int]$Matches[4] } else { 0 }
-            return @([int]$Matches[1],[int]$Matches[2],[int]$Matches[3],$n)
+        if ($v -match '^(\d{1,9})\.(\d{1,9})\.(\d{1,9})$') {
+            return @([int]$Matches[1],[int]$Matches[2],[int]$Matches[3])
         }
         return $null
     }
@@ -156,7 +156,7 @@ function Compare-PacketVersion {
     $pb = Parse-PV $B
     if ($null -eq $pa) { return -1 }
     if ($null -eq $pb) { return  1 }
-    for ($k = 0; $k -lt 4; $k++) {
+    for ($k = 0; $k -lt 3; $k++) {
         if ($pa[$k] -lt $pb[$k]) { return -1 }
         if ($pa[$k] -gt $pb[$k]) { return  1 }
     }

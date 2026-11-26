@@ -764,7 +764,7 @@ function scenarios() {
         // Receipts use the installer's own path style (C:\... for ps, /c/... for sh).
         STASH.set(h, { home: type === 'sh' ? unixPath(h) : h });
         fs.writeFileSync(receiptp(h), JSON.stringify({
-          schema:2, packetVersion:'2099.01.01-1', home:STASH.get(h).home, files:{}, tools:{},
+          schema:2, packetVersion:'99.0.0', home:STASH.get(h).home, files:{}, tools:{},
           unavailable:[], refresh:{status:'ok',at:'2099-01-01T00:00:00Z'},
           consensus:{grade:'off',pair:[],reason:'off'},lanes:{},relays:[],
           installedAt:'2099-01-01T00:00:00Z', platform:'win32',
@@ -775,7 +775,7 @@ function scenarios() {
       subCheck:(h,out,s,ctx) => {
         // Re-plant receipt then run with --allow-downgrade
         fs.writeFileSync(receiptp(h), JSON.stringify({
-          schema:2, packetVersion:'2099.01.01-1', home:STASH.get(h).home, files:{}, tools:{},
+          schema:2, packetVersion:'99.0.0', home:STASH.get(h).home, files:{}, tools:{},
           unavailable:[], refresh:{status:'ok',at:'2099-01-01T00:00:00Z'},
           consensus:{grade:'off',pair:[],reason:'off'},lanes:{},relays:[],
           installedAt:'2099-01-01T00:00:00Z', platform:'win32',
@@ -784,6 +784,13 @@ function scenarios() {
         const r = ctx.run(['--allow-downgrade']);
         if (r.status!==0) return `allow-downgrade: exit ${r.status}`;
         if (!r.stdout.includes('Downgrad')) return `allow-downgrade: no Downgrad in stdout`;
+        // A dated number (the shape earlier packets carried) counts as older than any packet, however large it looks.
+        const dated = fs.readFileSync(receiptp(h),'utf8').replace(/("packetVersion"\s*:\s*")[^"]*(")/, (m,a,b) => a+'2099.01.01-1'+b);
+        if (!dated.includes('2099.01.01-1')) return 'dated receipt: could not plant the dated number';
+        fs.writeFileSync(receiptp(h), dated, 'utf8');
+        const d = ctx.run([]);
+        if (d.status!==0) return `dated receipt: exit ${d.status}`;
+        if (!d.stdout.includes('Upgrading from 2099.01.01-1 to')) return 'dated receipt: no "Upgrading from 2099.01.01-1 to" in stdout';
         return null;
       }
     },
@@ -967,7 +974,7 @@ function scenarios() {
         const link = path.join(dsd,'ext-link');
         if (IS_WIN) fs.symlinkSync(sentDir, link, 'junction'); else fs.symlinkSync(sentDir, link);
         const foreign = JSON.stringify({
-          schema:2, packetVersion:'2026.09.24-1', home:style(otherHome), files:{ [style(sentinel)]:sha256f(sentinel) },
+          schema:2, packetVersion:'0.1.0', home:style(otherHome), files:{ [style(sentinel)]:sha256f(sentinel) },
           tools:{}, unavailable:[], refresh:{status:'ok',at:'2026-09-24T00:00:00Z'},
           consensus:{grade:'off',pair:[],reason:'off'},lanes:{},relays:[],
           installedAt:'2026-09-24T00:00:00Z', platform:IS_WIN?'windows':'posix',
@@ -1384,13 +1391,14 @@ function ladderScenarios() {
       if (!ctx.previous || !fs.existsSync(ctx.previous)) throw new ScenarioSkip('no previous packet');
       const dir=makeTmp('fixt-ladder-prev-'); extractPrevious(ctx.previous,dir);
       const entries=fs.readdirSync(dir); const previous=entries.length===1?path.join(dir,entries[0]):dir;
-      // A previous packet from before the ladder (2026.10.16-1 and older) must not own it and must hand ownership over;
-      // one that brought the ladder (2026.10.27-1 and later) must own it already and keep it through the upgrade.
-      // Packet versions are YYYY.MM.DD-N, so they compare as strings.
+      // A previous packet that had no ladder (dated numbers before 2026.10.27-1) must not own it and must hand ownership
+      // over; every later one (a later dated number, or any MAJOR.MINOR.PATCH number) must own it already and keep it
+      // through the upgrade. Dated numbers are YYYY.MM.DD-N, so they compare as strings.
       const prevVersion=(tryRead(path.join(previous,'VERSION'))||'').trim();
-      demand(/^\d{4}\.\d{2}\.\d{2}-\d+$/.test(prevVersion),`previous packet VERSION unreadable: "${prevVersion}"`);
+      const numbered=/^\d+\.\d+\.\d+$/.test(prevVersion);
+      demand(numbered || /^\d{4}\.\d{2}\.\d{2}-\d+$/.test(prevVersion),`previous packet VERSION unreadable: "${prevVersion}"`);
       installCase(ctx,[],{pkt:previous}); const before=readRequired(receiptp(ctx.home)).ladder;
-      if (prevVersion>='2026.10.27-1') demand(before?.owned===true,`previous packet ${prevVersion} should own the ladder`);
+      if (numbered || prevVersion>='2026.10.27-1') demand(before?.owned===true,`previous packet ${prevVersion} should own the ladder`);
       else demand(!before,`previous packet ${prevVersion} unexpectedly owns the ladder`);
       const out=installCase(ctx); demand(out.stdout.includes('Upgrading from'),'upgrade message missing'); ownedLadder(ctx);
     }),
@@ -1529,9 +1537,9 @@ function ladderScenarios() {
       installCase(ctx,['--uninstall']); demand(!fs.existsSync(frontdeskp(ctx.home)) && !fs.existsSync(frontreceiptp(ctx.home)),'retry was not uninstallable');
     }),
     test(46,'packet-to-packet upgrade preserves owned ladder',ctx=>{
-      const older=copyPacket(ctx,p=>fs.writeFileSync(path.join(p,'VERSION'),'2026.10.27-0\n'));
+      const older=copyPacket(ctx,p=>fs.writeFileSync(path.join(p,'VERSION'),'0.9.0\n'));
       installCase(ctx,[],{pkt:older}); ownedLadder(ctx);
-      const out=installCase(ctx); demand(out.stdout.includes('Upgrading from 2026.10.27-0'),'packet upgrade message missing');
+      const out=installCase(ctx); demand(out.stdout.includes('Upgrading from 0.9.0 to'),'packet upgrade message missing');
       const r=ownedLadder(ctx), manifest=readRequired(path.join(ctx.pkt,'ladder/manifest.json')), version=readRequired(path.join(ctx.pkt,'frontdesk/code-manifest.json')).version;
       demand(r.ladder.lastInstalled.release===manifest.release && r.ladder.lastInstalled.frontdesk===version,'upgrade lastInstalled does not name current release/version');
     }),
@@ -1727,7 +1735,7 @@ function agentScenarios() {
       const repeat=installCase(ctx); demand(!planHas(repeat.stdout,['CREATE','UPDATE','REMOVE']),'Cursor-only repeat changed targets'); neutralEntry(ctx,'cursor');
       const r=readRequired(receiptp(ctx.home)); installCase(ctx,['--uninstall']); assertAllRemoved(ctx.home,r);
     },{tools:{'cursor-agent':'99.0.0'},cursorCfg:{models:CURSOR_ALL_IDS,fail:false}}),
-    // 58/59 (since 2026.11.10-1): Muse's own contributor setting is reported, never changed.
+    // 58/59: Muse's own contributor setting is reported, never changed.
     test(58,'Muse contributor mode ON: warning, settings untouched',ctx=>{
       freshAgentHome(ctx.home);
       const f=path.join(ctx.home,'.config/muse/settings.json'); fs.mkdirSync(path.dirname(f),{recursive:true});
