@@ -7,14 +7,16 @@ import { pathToFileURL } from 'node:url';
 function options(argv) {
   const result = {};
   for (let i = 0; i < argv.length; i += 2) {
-    if (!['--packet', '--home', '--settings', '--out', '--repos'].includes(argv[i]) || !argv[i + 1]) {
-      throw new Error('expected --packet <dir> --home <dir> --settings <file> --out <dir> [--repos <dir>]');
+    if (!['--packet', '--home', '--settings', '--out', '--repos', '--mode'].includes(argv[i]) || !argv[i + 1]) {
+      throw new Error('expected --packet <dir> --home <dir> --settings <file> --out <dir> [--repos <dir>] [--mode desktop|server]');
     }
     result[argv[i].slice(2)] = argv[i + 1];
   }
   for (const name of ['packet', 'home', 'settings', 'out']) {
     if (!result[name]) throw new Error('expected --packet, --home, --settings and --out');
   }
+  result.mode ??= 'desktop';
+  if (!['desktop', 'server'].includes(result.mode)) throw new Error('expected --mode desktop|server');
   return result;
 }
 
@@ -201,7 +203,7 @@ async function main() {
   const repos = detectRepos(args.home, args.repos);
   const extras = otherTools();
 
-  const local = { seats: {} };
+  const local = { hostMode: args.mode, seats: {} };
   if (desktopNote) local.binaries = { claude: desktop.file };
   for (const [id, seat] of Object.entries(table.seats)) {
     const model = seat.model;

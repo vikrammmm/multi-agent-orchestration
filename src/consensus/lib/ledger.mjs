@@ -87,10 +87,11 @@ export function loadLedger(id) {
   return readJson(p.ledger);
 }
 
-export function createTask({ mode, chair, cochair, project, limitsName, continuedFrom, test, grade, unverified }) {
+export function createTask({ mode, chair, cochair, project, limitsName, continuedFrom, test, grade, unverified, hostMode }) {
   const id = makeTaskId();
   const startedAt = nowIso();
-  const limits = loadLimits(limitsName || 'standard');
+  const table = hostMode === 'server' ? 'server' : (limitsName || 'standard');
+  const limits = loadLimits(table);
   const deadlineAt = new Date(Date.parse(startedAt) + limits.totalHours * 3600 * 1000).toISOString();
   const p = ensureTaskDirs(id);
   const gradeRec = grade && grade.level ? { level: grade.level, note: grade.note || '' } : { level: 'standard', note: '' };
@@ -117,6 +118,11 @@ export function createTask({ mode, chair, cochair, project, limitsName, continue
     outcomeReason: null,
     grade: gradeRec,
     unverified: unverifiedRec,
+    ...(mode === 'assess' ? {} : {
+      hostMode: hostMode === 'server' ? 'server' : 'desktop',
+      chairDecided: [],
+      chairVerdict: null,
+    }),
   };
   if (continuedFrom) copyContinueFrom(ledger, continuedFrom);
   saveLedger(ledger);
@@ -219,5 +225,10 @@ export function materialPath(id, name) {
 }
 
 export function isClosed(ledger) {
-  return ['done', 'split', 'abandoned', 'recorded', 'failed'].includes(ledger.state);
+  return ['done', 'split', 'decided', 'abandoned', 'recorded', 'failed'].includes(ledger.state);
+}
+
+export function recordChairDecision(ledger, { phase, round, reason }) {
+  if (!Array.isArray(ledger.chairDecided)) ledger.chairDecided = [];
+  ledger.chairDecided.push({ phase, round, reason, at: nowIso() });
 }

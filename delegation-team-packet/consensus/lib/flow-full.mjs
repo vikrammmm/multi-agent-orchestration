@@ -7,12 +7,12 @@ import { refuse } from './fail.mjs';
 import { assertState, checkAskRecursion, checkFrozenChecklist, checkPending, checkStartNested } from './guard.mjs';
 import {
   addRound, closeTask, copyGoal, createTask, freezeChecklist, isClosed, loadIndex, loadLedger,
-  logEvent, materialText, readSeal, saveLedger, sealHash, setState, writeSeal,
+  logEvent, materialText, readSeal, recordChairDecision, saveLedger, sealHash, setState, writeSeal,
 } from './ledger.mjs';
 import { checkCallsAtCap, checkRounds, checkTime, nextRound } from './limits.mjs';
-import { taskPaths } from './paths.mjs';
+import { hostModeOf, requireHostMode, taskPaths } from './paths.mjs';
 import { buildPrompt, materialsBundle } from './prompt.mjs';
-import { writeFinal, writeSplitDecision } from './report.mjs';
+import { writeChairDecision, writeFinal, writeSplitDecision } from './report.mjs';
 import { blockingKey } from './schema.mjs';
 import {
   assertDispatchable, gradeForSeatIds, loadSeatsJson, pickCochair, unverifiedFor, usedFake,
@@ -30,8 +30,22 @@ function mats(id) {
   });
 }
 
-function splitLimit(ledger, check) {
+function serverLimit(ledger, check, phase, round) {
+  const last = (ledger.rounds || [])[(ledger.rounds || []).length - 1] || null;
+  const usePhase = phase || (last ? last.phase : String(ledger.state || ''));
+  const useRound = round != null ? round : (last ? last.round : 0);
+  recordChairDecision(ledger, { phase: usePhase, round: useRound, reason: check.code });
+  const seal = last && last.phase === 'signoff' ? readSeal(ledger.id, 'signoff', last.round) : null;
+  if (seal && seal.verdict) ledger.chairVerdict = seal.verdict;
+  const file = writeChairDecision(ledger, { phase: usePhase, round: useRound, reason: check.code });
+  closeTask(ledger, 'decided', check.code);
+  logEvent(ledger.id, 'chair-decision', { phase: usePhase, round: useRound, reason: check.code });
+  refuse(check.code, check.message, { state: 'decided', report: file });
+}
+
+function splitLimit(ledger, check, info = {}) {
   if (isClosed(ledger)) refuse(check.code, check.message);
+  if (hostModeOf(ledger) === 'server') serverLimit(ledger, check, info.phase, info.round);
   writeSplitDecision(ledger);
   closeTask(ledger, 'split', check.code);
   refuse(check.code, check.message, { state: 'split', report: path.join(taskPaths(ledger.id).reports, 'split-decision.md') });
@@ -39,6 +53,7 @@ function splitLimit(ledger, check) {
 
 export function cmdStart(args) {
   checkStartNested();
+  const hostMode = requireHostMode();
   const mode = args.mode || 'full';
   if (mode !== 'full' && mode !== 'advise') refuse('BAD_ARGS', 'mode must be full or advise.');
   if (args.limits && args.limits !== 'standard' && args.limits !== true) {
@@ -66,6 +81,7 @@ export function cmdStart(args) {
     test,
     grade,
     unverified,
+    hostMode,
   });
   if (args.goal) copyGoal(ledger.id, String(args.goal));
   const result = {
@@ -73,6 +89,7 @@ export function cmdStart(args) {
     id: ledger.id,
     state: ledger.state,
     mode: ledger.mode,
+    hostMode: hostModeOf(ledger),
     chair: ledger.chair,
     cochair: ledger.cochair,
     project: ledger.project,
@@ -123,11 +140,11 @@ export async function cmdAsk(args) {
   }
   const n = nextRound(ledger, phase);
   const time = checkTime(ledger);
-  if (!time.ok) splitLimit(ledger, time);
+  if (!time.ok) splitLimit(ledger, time, { phase, round: n });
   const rounds = checkRounds(ledger, phase);
-  if (!rounds.ok) splitLimit(ledger, rounds);
+  if (!rounds.ok) splitLimit(ledger, rounds, { phase, round: n });
   const calls = checkCallsAtCap(ledger);
-  if (!calls.ok) splitLimit(ledger, calls);
+  if (!calls.ok) splitLimit(ledger, calls, { phase, round: n });
   const seal = readSeal(ledger.id, phase, n);
   if (!seal) refuse('NO_SEAL', `No chair seal for ${phase} round ${n}.`);
   assertDispatchable(ledger.cochair);
@@ -156,15 +173,34 @@ export async function cmdAsk(args) {
   return transitionAsk(ledger, phase, n, seal, call);
 }
 
+function decideSignoff(ledger, seal, n, reason) {
+  recordChairDecision(ledger, { phase: 'signoff', round: n, reason });
+  if (seal && seal.verdict) ledger.chairVerdict = seal.verdict;
+  const file = writeChairDecision(ledger, { phase: 'signoff', round: n, reason });
+  closeTask(ledger, 'decided', reason);
+  logEvent(ledger.id, 'chair-decision', { phase: 'signoff', round: n, reason });
+  return file;
+}
+
 function transitionAsk(ledger, phase, n, seal, call) {
   const verdict = call.verdict;
+  const server = hostModeOf(ledger) === 'server';
+  let chairFile = null;
   if (phase === 'finish-line') {
     if (verdict.verdict === 'AGREE') {
       freezeChecklist(ledger);
       setState(ledger, 'frozen');
     } else if (n >= (ledger.limits.finishLineRounds || 2)) {
-      writeSplitDecision(ledger);
-      closeTask(ledger, 'split', 'finish-line OBJECT at last round');
+      if (server) {
+        freezeChecklist(ledger);
+        recordChairDecision(ledger, { phase: 'finish-line', round: n, reason: 'finish-line OBJECT at last round' });
+        setState(ledger, 'frozen');
+        chairFile = writeChairDecision(ledger, { phase: 'finish-line', round: n, reason: 'finish-line OBJECT at last round' });
+        logEvent(ledger.id, 'chair-decision', { phase: 'finish-line', round: n, reason: 'finish-line OBJECT at last round' });
+      } else {
+        writeSplitDecision(ledger);
+        closeTask(ledger, 'split', 'finish-line OBJECT at last round');
+      }
     } else {
       saveLedger(ledger);
     }
@@ -176,17 +212,23 @@ function transitionAsk(ledger, phase, n, seal, call) {
       closeTask(ledger, 'done', 'both DONE');
       writeFinal(ledger);
     } else if (prev && prev.blockingKey && prev.blockingKey === blockingKey(verdict)) {
-      writeSplitDecision(ledger);
-      closeTask(ledger, 'split', 'identical blocking set');
+      if (server) chairFile = decideSignoff(ledger, seal, n, 'identical blocking set');
+      else {
+        writeSplitDecision(ledger);
+        closeTask(ledger, 'split', 'identical blocking set');
+      }
     } else if (n >= (ledger.limits.signoffRounds || 3)) {
-      writeSplitDecision(ledger);
-      closeTask(ledger, 'split', 'sign-off rounds exhausted');
+      if (server) chairFile = decideSignoff(ledger, seal, n, 'sign-off rounds exhausted');
+      else {
+        writeSplitDecision(ledger);
+        closeTask(ledger, 'split', 'sign-off rounds exhausted');
+      }
     } else {
       setState(ledger, 'signoff');
     }
   }
   saveLedger(ledger);
-  return {
+  const out = {
     ok: true,
     id: ledger.id,
     state: ledger.state,
@@ -197,6 +239,11 @@ function transitionAsk(ledger, phase, n, seal, call) {
     callIndex: call.callIndex,
     outcome: ledger.outcome,
   };
+  if (chairFile) {
+    out.chairDecided = true;
+    out.report = chairFile;
+  }
+  return out;
 }
 
 export function cmdJob(args) {
@@ -205,6 +252,7 @@ export function cmdJob(args) {
   if (isClosed(ledger)) refuse('WRONG_STATE', `Task is ${ledger.state}.`);
   const cap = checkCallsAtCap(ledger);
   if (!cap.ok) {
+    if (hostModeOf(ledger) === 'server') serverLimit(ledger, cap);
     writeSplitDecision(ledger);
     closeTask(ledger, 'split', cap.code);
     refuse(cap.code, cap.message);
@@ -239,6 +287,7 @@ export function cmdStatus(args) {
     ok: true,
     id: ledger.id,
     mode: ledger.mode,
+    hostMode: hostModeOf(ledger),
     state: ledger.state,
     chair: ledger.chair,
     cochair: ledger.cochair,
@@ -256,7 +305,7 @@ export function cmdList(args) {
   const index = loadIndex();
   let tasks = index.tasks || [];
   if (args.open) {
-    tasks = tasks.filter((t) => !['done', 'split', 'abandoned', 'recorded', 'failed'].includes(t.state));
+    tasks = tasks.filter((t) => !['done', 'split', 'decided', 'abandoned', 'recorded', 'failed'].includes(t.state));
   }
   return { ok: true, tasks };
 }
@@ -276,5 +325,6 @@ export function nextStep(ledger) {
   if (ledger.state === 'paused') return 'fix the cause and rerun the same command';
   if (ledger.state === 'open') return 'consult is in progress or ready';
   if (ledger.state === 'answered') return 'read reports/feedback.md or consult again';
+  if (ledger.state === 'decided') return null;
   return null;
 }

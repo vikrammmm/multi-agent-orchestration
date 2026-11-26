@@ -36,6 +36,9 @@ export function printHuman(obj) {
   if (obj.detached) lines.push(`detached pid ${obj.pid}`);
   if (obj.status === 'pending') lines.push('still pending');
   if (obj.twoVendors != null) lines.push(`two vendors available: ${obj.twoVendors}`);
+  if (obj.hostModeDisplay) lines.push(`host mode: ${obj.hostModeDisplay}`);
+  else if (obj.hostMode) lines.push(`host mode: ${obj.hostMode}`);
+  if (obj.hostModeProblem) lines.push(`host mode problem: ${obj.hostModeProblem}`);
   if (Array.isArray(obj.seats) && obj.seats[0] && obj.seats[0].id) {
     for (const s of obj.seats) {
       if (s.unverified) {

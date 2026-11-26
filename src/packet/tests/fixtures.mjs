@@ -290,6 +290,10 @@ const claudep   = h => path.join(h,'.claude/CLAUDE.md');
 const teamp     = h => path.join(h,'.config/delegate-skills/team-policy/profiles/team.md');
 const consensusd= h => path.join(h,'.config/delegate-skills/consensus');
 const routesIn  = h => (tryRead(teamp(h))||'').replace(/\r\n/g,'\n');
+const modeLine = {
+  desktop: '- Mode: desktop (a person works in the chat)',
+  server: '- Mode: server (no person in the chat; follow "Desktop mode and server mode" in POLICY.md)',
+};
 
 // Per-home values a scenario's prepare step hands to its checks (homes are plain strings).
 const STASH = new Map();
@@ -387,6 +391,14 @@ const hasStr = want => (_,out) => out.includes(want) ? null : `stdout missing: $
 const noStr  = want => (_,out) => !out.includes(want) ? null : `stdout should not contain: ${JSON.stringify(want)}`;
 const noReceipt = h => !isFile(receiptp(h)) ? null : 'receipt should not exist';
 const hasReceipt = h => { const r=tryJson(receiptp(h)); return r&&r.schema===2 ? null : `receipt missing or not schema 2 (got ${r?.schema})`; };
+const checkMode = mode => (home, out) => {
+  if (tryJson(receiptp(home))?.hostMode !== mode) return `receipt did not record ${mode} mode`;
+  if (tryJson(localp(home))?.hostMode !== mode) return `local.json did not record ${mode} mode`;
+  const machine = routesIn(home).split('## This machine\n')[1]?.split('\n## ')[0];
+  if (!machine?.split('\n').includes(modeLine[mode])) return `profile is missing the ${mode} mode line`;
+  if (out.split(/\r?\n/).filter(line => line === `Mode: ${mode}`).length !== 2) return `plan and summary did not both show ${mode} mode`;
+  return null;
+};
 const noPlaceholders = h => { const t=tryRead(teamp(h)); if(!t) return 'team.md missing'; return /\{\{/.test(t)?'team.md has {{ placeholder':null; };
 const hasDelegation = h => {
   const md = tryRead(claudep(h));
@@ -519,7 +531,7 @@ function scenarios() {
     { n:2, title:'fresh install',
       wantNode:yesNode, tools:noRelays('2.1.280'), cursorCfg:cursNone,
       prepare: h => { setupHome(h); },
-      check: seq(exit0, hasReceipt, noPlaceholders, hasDelegation,
+      check: seq(exit0, hasReceipt, noPlaceholders, hasDelegation, checkMode('desktop'),
         h => {
           const files = receiptFiles(h);
           for (const want of ['.config/delegate-skills/team-policy/POLICY.md', '.config/delegate-skills/team-policy/profiles/team.md',
@@ -1796,6 +1808,49 @@ function agentScenarios() {
 // ─── main runner ───────────────────────────────────────────────────────────────
 
 
+function hostModeScenarios() {
+  const common = { wantNode: true, tools: { claude: '2.1.280' } };
+  const expectMode = (home, out, mode) => {
+    const error = checkMode(mode)(home, out);
+    demand(!error, error);
+  };
+  return [
+    { ...common, n:71, title:'fresh server mode', args:['--mode', 'server'],
+      check:seq(exit0, checkMode('server')) },
+    { ...common, n:72, title:'remember server mode and switch to desktop', exercise:ctx => {
+      installCase(ctx, ['--mode', 'server']);
+      expectMode(ctx.home, installCase(ctx).stdout, 'server');
+
+      const before = snapshotTree(ctx.home);
+      const dryRun = installCase(ctx, ['--dry-run', '--mode=desktop']);
+      demand(dryRun.stdout.split(/\r?\n/).includes('Mode: desktop'), 'dry-run plan is missing desktop mode');
+      equalTree(before, ctx.home, 'dry-run mode switch');
+
+      const noNode = buildEnv(ctx.fakeDir, false);
+      assertNoNode(noNode, ctx.bash);
+      const marks = readRequired(localp(ctx.home));
+      expectMode(ctx.home, installCase(ctx, ['--mode', 'desktop'], { env:noNode }).stdout, 'desktop');
+      const updated = readRequired(localp(ctx.home));
+      demand(updated.hostMode === 'desktop' && JSON.stringify(updated.seats) === JSON.stringify(marks.seats),
+        'switch without Node did not keep seat marks');
+    } },
+    { ...common, n:73, title:'invalid host mode makes no changes', exercise:ctx => {
+      const before = snapshotTree(ctx.home);
+      for (const args of [['--mode', 'bogus'], ['--mode=SERVER'], ['--mode='], ['--mode']]) {
+        const refused = installCase(ctx, args, { status:1 });
+        demand(refused.stdout.includes('Invalid --mode value:') && refused.stdout.includes('(expected desktop or server)'),
+          'bad mode diagnostic missing');
+        equalTree(before, ctx.home, 'invalid host mode');
+      }
+    } },
+    { ...common, n:74, title:'fresh server mode without Node', wantNode:false, args:['--mode=server'],
+      check:seq(exit0, checkMode('server'), h => chk(tryJson(localp(h))?.disabled === 'needs Node 18+', 'local.json must disable consensus without Node')) },
+    { ...common, n:75, title:'fresh server mode when the machine check fails', args:['--mode=server'],
+      extraEnv:{ TEAM_SETUP_FAIL:'1' }, check:seq(exit0, checkMode('server'),
+        h => chk(tryJson(localp(h))?.disabled?.startsWith('machine check failed:'), 'local.json must disable consensus after a failed check')) },
+  ];
+}
+
 function folderScenarios() {
   const common={wantNode:true,tools:{claude:'99.0.0',codex:'99.0.0'},cursorCfg:{models:[],fail:false},codexCache:makeCodexCache()};
   const test=(n,title,exercise)=>({...common,n,title,exercise,...(n===70?{codexCache:makeCodexCache(['gpt-6.1-sol'])}:{})});
@@ -1894,7 +1949,7 @@ async function main() {
 
   ensureHelper();
 
-  const scens = [...scenarios(), ...ladderScenarios(), ...agentScenarios(), ...folderScenarios()];
+  const scens = [...scenarios(), ...ladderScenarios(), ...agentScenarios(), ...folderScenarios(), ...hostModeScenarios()];
   const filter = args.scenarios;
   if (filter?.some(n => !scens.some(s => s.n === n))) throw new Error('unknown scenario number in --scenario');
   const onlyType = args.only;

@@ -8,7 +8,7 @@ import {
   closeTask, copyBrief, createTask, isClosed, loadLedger, materialText, saveLedger, setState,
 } from './ledger.mjs';
 import { checkCallsAtCap, checkConsultCalls, checkConsultations } from './limits.mjs';
-import { taskPaths } from './paths.mjs';
+import { hostModeOf, requireHostMode, taskPaths } from './paths.mjs';
 import { buildPrompt, materialsBundle } from './prompt.mjs';
 import { formatConsultFeedback, writeFeedback, writeSplitConsult } from './report.mjs';
 import {
@@ -33,6 +33,10 @@ export function ensureTask(args) {
     if (isClosed(ledger)) refuse('WRONG_STATE', `Task is ${ledger.state}.`);
     return ledger;
   }
+  const hostMode = requireHostMode();
+  if (args.limits && args.limits !== 'standard' && args.limits !== true) {
+    refuse('NO_EXTEND', 'No command can raise a limit; only --limits standard is allowed.');
+  }
   if (!args.project || !fs.existsSync(path.resolve(String(args.project)))) {
     refuse('BAD_ARGS', '--project must be an existing directory.');
   }
@@ -48,6 +52,7 @@ export function ensureTask(args) {
     test: seats.some(usedFake),
     grade,
     unverified,
+    hostMode,
   });
   return ledger;
 }
@@ -137,13 +142,17 @@ export async function cmdConsult(args) {
   rec.answers = results.map((r) => r.verdict);
   saveLedger(ledger);
   const paused = results.find((r) => r.pauseReason);
-  if (paused) return applyPause(ledger, paused.pauseReason, 'consult seat failed');
+  if (paused) {
+    const out = applyPause(ledger, paused.pauseReason, 'consult seat failed');
+    out.hostMode = hostModeOf(ledger);
+    return out;
+  }
 
   if (seats.length === 1) {
-    const file = writeFeedback(ledger, formatConsultFeedback(results[0].verdict));
+    const file = writeFeedback(ledger, formatConsultFeedback(results[0].verdict, hostModeOf(ledger)));
     rec.outcome = 'answered';
     setState(ledger, 'answered', { outcome: 'answered' });
-    return { ok: true, id: ledger.id, state: 'answered', report: file, seats, ...gradeFields(ledger) };
+    return { ok: true, id: ledger.id, state: 'answered', hostMode: hostModeOf(ledger), report: file, seats, ...gradeFields(ledger) };
   }
 
   return mergeConfirm(ledger, rec, seats, results, args);
@@ -170,7 +179,11 @@ async function mergeConfirm(ledger, rec, seats, consultResults, args) {
     });
     const mergeCall = await runSeatCall({ ledger, seatId: seats[0], phase: 'merge', prompt: mergePrompt });
     rec.calls += callsUsed(mergeCall);
-    if (mergeCall.pauseReason) return applyPause(ledger, mergeCall.pauseReason, 'merge failed');
+    if (mergeCall.pauseReason) {
+      const out = applyPause(ledger, mergeCall.pauseReason, 'merge failed');
+      out.hostMode = hostModeOf(ledger);
+      return out;
+    }
     draft = mergeCall.verdict;
     rec.draft = draft;
 
@@ -186,20 +199,24 @@ async function mergeConfirm(ledger, rec, seats, consultResults, args) {
     });
     const confirmCall = await runSeatCall({ ledger, seatId: seats[1], phase: 'confirm', prompt: confirmPrompt });
     rec.calls += callsUsed(confirmCall);
-    if (confirmCall.pauseReason) return applyPause(ledger, confirmCall.pauseReason, 'confirm failed');
+    if (confirmCall.pauseReason) {
+      const out = applyPause(ledger, confirmCall.pauseReason, 'confirm failed');
+      out.hostMode = hostModeOf(ledger);
+      return out;
+    }
     confirm = confirmCall.verdict;
     rec.confirm = confirm;
 
     if (confirm.verdict === 'CONFIRM') {
-      const file = writeFeedback(ledger, formatConsultFeedback(draft));
+      const file = writeFeedback(ledger, formatConsultFeedback(draft, hostModeOf(ledger)));
       rec.outcome = 'answered';
       setState(ledger, 'answered', { outcome: 'answered' });
-      return { ok: true, id: ledger.id, state: 'answered', report: file, seats, mergeRounds: round, ...gradeFields(ledger) };
+      return { ok: true, id: ledger.id, state: 'answered', hostMode: hostModeOf(ledger), report: file, seats, mergeRounds: round, ...gradeFields(ledger) };
     }
   }
 
   rec.outcome = 'split';
   const file = writeSplitConsult(ledger, { draft, confirm, answers: rec.answers });
   closeTask(ledger, 'split', 'consult confirm OBJECT');
-  return { ok: true, id: ledger.id, state: 'split', report: file, seats, calls: rec.calls, ...gradeFields(ledger) };
+  return { ok: true, id: ledger.id, state: 'split', hostMode: hostModeOf(ledger), report: file, seats, calls: rec.calls, ...gradeFields(ledger) };
 }

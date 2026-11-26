@@ -20,5 +20,16 @@
     "seatCallsPerConsultation": 6,
     "consultationsPerTask": 3,
     "inlineMaterialMaxBytes": 153600
+  },
+  "server": {
+    "finishLineRounds": 3,
+    "signoffRounds": 3,
+    "totalCalls": 15,
+    "totalHours": 4,
+    "seatCallMinutes": 45,
+    "mergeRounds": 2,
+    "seatCallsPerConsultation": 6,
+    "consultationsPerTask": 3,
+    "inlineMaterialMaxBytes": 153600
   }
 }

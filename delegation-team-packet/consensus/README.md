@@ -66,6 +66,14 @@ node referee.mjs wait --task <id>
 
 Both `DONE`: `reports/final.md`. Otherwise fix the blocking items and repeat (3 rounds, or sooner if the blocking set repeats).
 
+## Server mode
+
+The team installer records a host mode in `local.json`: `desktop` or `server`. On a server
+machine nobody answers, so the chair never waits for a person. The finish line allows 3 rounds;
+an `OBJECT` at the last round freezes the chair's checklist and the task moves on. Where a
+desktop task would close `split`, the referee closes `decided` instead and writes
+`reports/chair-decision.md`. The result must say plainly that the reviewers did not agree.
+
 ## Advise-mode walkthrough
 
 Write a brief, then:

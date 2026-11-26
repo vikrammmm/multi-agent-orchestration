@@ -64,6 +64,29 @@ export function localJsonPath() {
   return path.join(runtimeDir(), 'local.json');
 }
 
+export const SERVER_HOST_NOTE = 'server (review disagreements are settled by the chair after 3 rounds)';
+
+// The machine host mode comes only from local.json (written by the team installer).
+// A missing file or a missing key means desktop. Any other value is invalid.
+export function hostModeFromLocal() {
+  const value = loadLocalJson().hostMode;
+  if (value === undefined) return 'desktop';
+  return value;
+}
+
+export function requireHostMode() {
+  const value = hostModeFromLocal();
+  if (value !== 'desktop' && value !== 'server') {
+    refuse('BAD_HOST_MODE', `Unknown host mode ${JSON.stringify(value)}; run the team installer again.`);
+  }
+  return value;
+}
+
+// A task keeps the mode it started with. Older ledgers without the field read as desktop.
+export function hostModeOf(ledger) {
+  return ledger && ledger.hostMode === 'server' ? 'server' : 'desktop';
+}
+
 // A missing local.json means no machine marks. One that exists but cannot be read switches
 // consensus off (fail closed): its marks might have excluded seats or disabled consensus.
 export function loadLocalJson() {

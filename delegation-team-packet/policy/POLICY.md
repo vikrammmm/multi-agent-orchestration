@@ -13,8 +13,9 @@ exist, which routes and seats are available) are in `profiles\team.md` next to t
   never set, store, ask for or depend on one, and never use a "bring your own key" mode.
 - Nothing runs as a background service. Every helper and every reviewer is a one-shot process
   that ends with its job.
-- The person in the chat decides when extra cost is worth it. An agent suggests a second opinion
-  or a consensus run in one plain sentence; it never spends the extra calls silently.
+- In desktop mode, the person in the chat decides when extra cost is worth it. An agent suggests a
+  second opinion or a consensus run in one plain sentence and never spends the extra calls silently.
+  See "Desktop mode and server mode" for unattended reviews.
 - Every helper is trusted. Any task may be delegated to any
   route the profile lists, including work that uses the person's live accounts, logins, passwords
   or other credentials, commits, pushes, releases, deletions and the final review. Needing a login
@@ -36,6 +37,27 @@ replace repository instructions or project-specific controls.
 Before substantial tasks, read this policy and `profiles\team.md` from the paths given by the
 local bootstrap. If either file is missing or unreadable, report that fact and stop the
 delegation-specific phase; do not reconstruct the rules from memory.
+
+## Desktop mode and server mode
+
+The device profile says which mode this machine runs. Desktop mode follows the rest of this file.
+In server mode, another program starts the agent. The agent runs unattended and nobody answers
+questions.
+
+- Wherever this rulebook says to suggest, offer or ask the person, decide for yourself. When a
+  consensus trigger fires, run the review yourself. Use full mode when you may chair and advise mode
+  otherwise. Skip the task-sizing trial.
+- Allow at most 3 rounds to agree the finish line and at most 3 sign-off rounds. If the reviewers
+  still disagree, the referee closes the task as `decided`. Make your best judgment and move
+  forward. Say plainly in your result that the second reviewer did not agree and list the open
+  points. Never present a split as agreement. In advise mode, settle a split the same way.
+- If the referee pauses, for example because a seat is unavailable or times out, rerun the same
+  command once. If it is still paused, use your own judgment and state that the work was not reviewed.
+- Never wait for a person. Keep the answer format the calling program asked for. Put review notes
+  only where that format allows.
+- Server mode grants no permission. Pushing, releasing, deleting, sending messages, production
+  changes and anything else that needs a person's OK may happen only when the instructions of the
+  program that started you already authorize it.
 
 ## Working style: orchestrator plus cheap helpers
 
@@ -204,11 +226,12 @@ Nothing is hooked into Claude Code, Codex or Muse; the ladder only answers when 
 
 ## Consensus mode (two CTOs)
 
-For big or risky tasks two top-tier models must agree the finish line before workers build, and
-both must sign off before the task is finished. A neutral referee program counts rounds, calls
-and time against fixed limits and stops with a one-page split decision for the owner when they
-are reached. The how-to is the installed `consensus` skill; the profile says whether this machine
-can run it and at which grade (it needs Node 18+ and two different usable models).
+In desktop mode, for big or risky tasks two top-tier models must agree the finish line before
+workers build, and both must sign off before the task is finished. A neutral referee program counts
+rounds, calls and time against fixed limits and stops with a one-page split decision for the owner
+when they are reached. See "Desktop mode and server mode" for how splits are handled on a server.
+The how-to is the installed `consensus` skill. The profile says whether this machine can run it
+and at which grade (it needs Node 18+ and two different usable models).
 
 Roles come from model plus effort, never from vendor:
 
@@ -242,11 +265,12 @@ Rules:
   the best available model may chair, and the task is labelled below CTO level. The co-CTO is a
   headless, read-only seat chosen by the referee by the pairing rule above, unless the chair names
   one (a named seat must be usable here and a different model).
-- When: the agent suggests it in one plain sentence on mechanical triggers (8 or more files or
-  more than one repository; money, payments, security, credentials, personal data or production
-  paths; gates failed twice; irreversible steps; unclear, contradictory or architectural tasks).
-  The person may decline, and may ask for it at any time. Small tasks stay as today.
-- Task sizing (trial): before nontrivial work (tiny edits skip it) the agent also runs the
+- When: in desktop mode the agent suggests it in one plain sentence on mechanical triggers (8 or
+  more files or more than one repository; money, payments, security, credentials, personal data or
+  production paths; gates failed twice; irreversible steps; unclear, contradictory or architectural
+  tasks). The person may decline, and may ask for it at any time. In server mode, see "Desktop mode
+  and server mode". Small tasks stay as today.
+- Task sizing (desktop trial): before nontrivial work (tiny edits skip it) the agent also runs the
   referee's `assess` command, passing what the triggers above say. A cheap assessor (GPT-6 Luna at
   high, read-only; Claude Sonnet 5.5 at high where Codex is missing, Sonnet 4.6 where Claude Code
   is older than 2.1.284) sizes the task in a fixed form, and the agent records what happened with
@@ -261,13 +285,14 @@ Rules:
   chair.
 - Worker-started sessions (Muse, Cursor on Grok 4.6 or on Grok 4.7 below xhigh, Codex on Luna,
   Terra, GPT-6 Sol, GPT-6.2 Sol or GPT-6.1 Sol below xhigh, Claude on Sonnet or Haiku) use advise
-  mode: on the same triggers the worker offers the person the opinion of one CTO or both. Both
-  means one unified
-  feedback from two different models; when the two cannot agree the split goes to the person. The
+  mode. In desktop mode, on the same triggers the worker offers the person the opinion of one CTO
+  or both. Both means one report from two different models. When the two cannot agree in desktop
+  mode, the split goes to the person. The
   CTOs advise and review; they hold no veto over the worker's finishing unless the person asks for a
   sign-off. At most 3 consultations per worker task.
-- Limits (Standard): 2 finish-line rounds, 3 sign-off rounds, 15 calls and 4 hours per task,
-  45 minutes per seat call; 6 seat calls per consultation. No model can extend a budget. A
+- Limits (Standard): 2 finish-line rounds in desktop mode (see "Desktop mode and server mode" for
+  server rounds), 3 sign-off rounds, 15 calls and 4 hours per task, 45 minutes per seat call;
+  6 seat calls per consultation. No model can extend a budget. In desktop mode, a
   stopped task continues only as a new task the chair starts with `--continue-from`, which the
   ledger links for the person to see.
 - Seats are read-only: no file changes, no commands that change anything, no delegation, no
@@ -275,17 +300,17 @@ Rules:
   `DELEGATION_DISPATCHED` set) must never run the referee, and the referee refuses them. Every
   seat bills its subscription login; the referee strips API-key variables from the seat
   environment.
-- Sign-off is a two-key act: the chair seals its own verdict first, the seat answers without
-  seeing it, and only two DONE verdicts in the same round finish the task. Blocking items must
+- Sign-off is a two-key act: the chair seals its own verdict first and the seat answers without
+  seeing it. In desktop mode, only two DONE verdicts in the same round finish the task. Blocking items must
   cite a checklist line or a concrete defect with evidence; everything else goes to a "later"
   list. The chair still lands the change; the referee never edits project code.
 - A seat's verdict is a claim like any worker's: the chair reruns the gates and reads the diff
   itself before landing.
 - Never a silent single sign-off or an unlabelled downgrade: a lower grade is always stated. If a
-  seat fails because the account does not offer its model, the task pauses; the chair tells the
-  person, who runs the packet installer with `--unavailable <model id>`. The chair then starts a new
-  task with `--continue-from`, which
-  picks the next usable pair. The reviewers of a running task are never changed silently. A
+  seat fails because the account does not offer its model, the task pauses. In desktop mode, the
+  chair tells the person, who runs the packet installer with `--unavailable <model id>`. The chair
+  then starts a new task with `--continue-from`, which picks the next usable pair. The reviewers
+  of a running task are never changed silently. A
   machine with Claude Code alone still has everything else in this rulebook.
 
 ## Execution and credential boundaries

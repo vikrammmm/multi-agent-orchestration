@@ -16,6 +16,8 @@ The rulebook, profile, helper definitions, lane file, consensus skills and this 
 by the packet installer. Do not edit them; ask the packet owner for a newer packet and run its
 installer again.
 
+In server mode, follow "Desktop mode and server mode" in `POLICY.md` wherever these instructions say to ask a person.
+
 {{FOLDERS}}
 
 (This section, from its heading to the next `## ` heading, is replaced whenever the packet

@@ -1,4 +1,4 @@
-# Consensus referee: specification (v0.2)
+# Consensus referee: specification (v0.3)
 
 This file is the design contract for the
 referee program and the work order for whoever implements it. Plain-language rules live in
@@ -10,7 +10,22 @@ Two top-tier models ("CTOs") must agree a task's finish line before workers buil
 sign off before the task counts as finished. A neutral program, the referee, owns the ledger, the
 counters, the timers and the report formats, so the limits are identical no matter which agent
 starts the task. The referee never edits project code and never runs in the background as a
-service. When the limits are reached it stops and hands the owner a one-page split decision.
+service. On a desktop machine, when the limits are reached it stops and hands the owner a
+one-page split decision. On a server machine, where nobody answers, the chair decides after the
+limit and the task moves forward anyway (sections 1b and 8b).
+
+## 1b. Host mode (desktop / server)
+
+The machine-marks file the referee already reads (`loadLocalJson()` in `lib/paths.mjs`, the
+runtime `local.json`) carries a key `hostMode` with value `"desktop"` or `"server"`. The team
+installer writes it. A missing file or a missing key means `desktop`. No command-line flag and no
+environment variable can set or change the host mode. It is a machine setting, like the rule that
+no command can raise a limit.
+
+Any other value is invalid. Then `start` and a `consult` that would create a new task refuse with
+code `BAD_HOST_MODE` (exit 2, the same refusal mechanism as other refusals) and a plain message
+to run the team installer again. A `consult` that reuses a task (`--task`) uses the mode the task
+started with and does not check the file. `assess` ignores host mode entirely.
 
 GPT-6.2 Sol is the primary GPT CTO; GPT-6.1 Sol remains an active tier 1 reserve.
 
@@ -141,19 +156,23 @@ project (relative path, size, mtime for every file outside the excluded folders)
 marks the call `tainted: true`, logs an event, and the verdict is still recorded but reported as
 tainted.
 
-## 4. Limits ("standard", in `limits.json`)
+## 4. Limits ("standard" and "server", in `limits.json`)
 
-| Limit | Value |
-| --- | --- |
-| Finish-line rounds per full task | 2 |
-| Sign-off rounds per full task | 3 |
-| Total calls per full task (seat calls + logged worker jobs) | 15 |
-| Total elapsed time per full task | 4 hours from `start` |
-| Minutes per seat call | 45 |
-| Merge rounds per consultation | 2 |
-| Seat calls per consultation | 6 |
-| Consultations per worker task | 3 |
-| No-progress rule | identical blocking set in two consecutive sign-off rounds ends the task |
+| Limit | standard | server |
+| --- | --- | --- |
+| Finish-line rounds per full task | 2 | 3 |
+| Sign-off rounds per full task | 3 | 3 |
+| Total calls per full task (seat calls + logged worker jobs) | 15 | 15 |
+| Total elapsed time per full task | 4 hours from `start` | 4 hours from `start` |
+| Minutes per seat call | 45 | 45 |
+| Merge rounds per consultation | 2 | 2 |
+| Seat calls per consultation | 6 | 6 |
+| Consultations per worker task | 3 | 3 |
+| No-progress rule | identical blocking set in two consecutive sign-off rounds ends the task | same as standard |
+
+A server-mode task copies the `server` table into `ledger.limits`; a desktop task copies
+`standard` as before. The table is chosen by host mode, never by a flag. `--limits` values other
+than `standard` are still refused.
 
 No command can raise a limit for an existing task. There is no `extend`; a stopped task can be
 carried into a new task with `start --continue-from <id>` (copies the frozen checklist and the
@@ -169,7 +188,7 @@ last materials; the new task has a fresh budget, and the ledger links both so th
 <ledger>\tasks\<id>\frozen\checklist.md     copy taken when the finish line was agreed
 <ledger>\tasks\<id>\seals\<phase>-<round>.json   the chair's sealed verdict per round
 <ledger>\tasks\<id>\calls\<n>\              one folder per seat call: prompt.md, stdout.txt, stderr.txt, verdict.json, meta.json, materials\ (snapshot), copy\ (cursor only, deleted after)
-<ledger>\tasks\<id>\reports\                split-decision.md, final.md, feedback.md, split.md, split-raw.md
+<ledger>\tasks\<id>\reports\                split-decision.md, final.md, feedback.md, split.md, split-raw.md, chair-decision.md (server only)
 <ledger>\tasks\<id>\pending.json            present while a detached call is running: {pid, command, startedAt}
 ```
 
@@ -182,6 +201,11 @@ the frozen checklist, null until frozen), `rounds` [ {`phase`, `round`, `sealHas
 `outcome`} ], `continuedFrom`, `closedAt`, `outcome`, `outcomeReason`, `grade` {`level`
 (`standard` | `single-vendor` | `below-cto` | `single-reviewer`), `note`} and `unverified`
 [ {`seat`, `reason`} ] (older ledgers without these fields read as standard, with no unverified seats).
+`hostMode` (`desktop` | `server`, full and advise tasks) records the mode the task started with;
+a task keeps it even if `local.json` changes later, and older ledgers without it read as
+`desktop`. `chairDecided` lists each chair decision
+[ {`phase`, `round`, `reason`, `at`} ] (server only, empty otherwise). `chairVerdict` holds the
+chair's last sealed sign-off verdict (`DONE` | `NOT_DONE`) when a server task closed `decided`.
 
 Task id: `YYYYMMDD-HHMM-xxxx` (4 random base32 characters). Task ids are printed on `start` and
 `consult` and must be passed to every later command. An id that is not a plain name (letters,
@@ -190,7 +214,10 @@ digits, dot, dash, underscore; no `..`) is refused with `BAD_TASK_ID`.
 ## 6. Task states
 
 Full mode: `finish-line` → `frozen` → `signoff` → `done` | `split` | `paused` | `abandoned`.
+Server full mode adds a closed state `decided`: the chair's judgment after the limit.
 Advise mode: `open` → `answered` | `split` | `paused` | `abandoned`.
+`decided` is closed everywhere `done` and `split` are: `isClosed`, `list --open`, `nextStep`
+(returns null), `close` refusing an already closed task, and the index.
 `paused` means a seat was unavailable, timed out, or returned an unusable verdict twice; the
 chair or owner reruns the same command after fixing the cause (the failed calls stay counted).
 
@@ -202,16 +229,16 @@ a refusal (limit, guard, wrong state, missing seal), 1 on an internal error. `--
 
 | Command | What it does |
 | --- | --- |
-| `start --mode full --chair <seat> --project <dir> --goal <file> [--cochair <seat>] [--limits standard] [--continue-from <id>]` | creates the task and its ledger, copies the goal into `materials\goal.md`, prints the id, the co-CTO, `grade` (with `gradeNote` when not standard) and `unverified`; refuses per section 3 (`CONSENSUS_DISABLED`, `SAME_MODEL`, `SEAT_*`) before creating anything |
+| `start --mode full --chair <seat> --project <dir> --goal <file> [--cochair <seat>] [--limits standard] [--continue-from <id>]` | creates the task and its ledger, copies the goal into `materials\goal.md`, prints the id, the co-CTO, `hostMode`, `grade` (with `gradeNote` when not standard) and `unverified`; refuses per section 3 (`CONSENSUS_DISABLED`, `SAME_MODEL`, `SEAT_*`) before creating anything; an invalid `hostMode` in `local.json` refuses with `BAD_HOST_MODE` |
 | `seal --task <id> --phase finish-line\|signoff --file <chair verdict json>` | records the chair's verdict for the next round before the co-CTO is asked; refuses if the round already has a seal or the state is wrong |
 | `ask --task <id> --phase finish-line\|signoff [--detach] [--keep-copy]` | runs the co-CTO seat for the current round with the current `materials\`; enforces every limit; records and returns the verdict; transitions the state |
 | `job --task <id> --lane <lane> --note <text>` | logs a worker dispatch against the call budget; refuses when the budget is exhausted |
-| `consult --project <dir> --brief <file> --seats both\|<seat>[,<seat>] [--task <id>] [--stage plan\|review] [--detach]` | advise mode for worker-started sessions; creates or reuses an advise task, runs the seats, writes `feedback.md` or `split.md`; returns `grade` (two different models, or `single-reviewer` for one named seat) and `unverified`; `both` with fewer than two different usable models refuses before any seat call |
+| `consult --project <dir> --brief <file> --seats both\|<seat>[,<seat>] [--task <id>] [--stage plan\|review] [--detach]` | advise mode for worker-started sessions; creates or reuses an advise task, runs the seats, writes `feedback.md` or `split.md`; returns `hostMode`, `grade` (two different models, or `single-reviewer` for one named seat) and `unverified`; `both` with fewer than two different usable models refuses before any seat call; a new task with an invalid `hostMode` refuses with `BAD_HOST_MODE` |
 | `wait --task <id> [--minutes 9]` | blocks until a detached call finishes or the minutes elapse; returns the call result or `{"status":"pending"}`; when the detached referee is gone without printing a result, `REFEREE_STOPPED` and the task is paused (an assessment: `failed`) |
-| `status --task <id>` | the ledger summary: state, counters, deadline, last verdict, next step; collects a detached referee that has ended, as `wait` does |
+| `status --task <id>` | the ledger summary: state, `hostMode`, counters, deadline, last verdict, next step; collects a detached referee that has ended, as `wait` does |
 | `list [--open]` | the task index |
-| `close --task <id> --outcome abandoned --reason <text>` | the only manual close; `done` and `split` are set by the referee itself |
-| `doctor` | checks Node, the ledger folder, and each seat by the eligibility rule of section 3 (reporting the reason, the seat's `tier`, `family` and any not-verified note), login status where the CLI exposes it without spending tokens; reports `disabled` and the `bestPair` (the pair `consult --seats both` would use, with its grade, or `off`); `--human` prints one line per seat and a best-pair line |
+| `close --task <id> --outcome abandoned --reason <text>` | the only manual close; `done`, `split` and `decided` are set by the referee itself |
+| `doctor` | checks Node, the ledger folder, and each seat by the eligibility rule of section 3 (reporting the reason, the seat's `tier`, `family` and any not-verified note), login status where the CLI exposes it without spending tokens; reports `disabled` and the `bestPair` (the pair `consult --seats both` would use, with its grade, or `off`); reports the host mode (`hostMode`, `hostModeDisplay`, and `hostModeProblem` when invalid); `--human` prints one line per seat, a host-mode line and a best-pair line |
 | `init-project [--dir <project>] [--write]` | prints (or with `--write`, appends to the project's `AGENTS.md`) the short block that tells Cursor and Muse sessions in that project how to consult the CTOs |
 | `--version` | prints the runtime version and the installed source stamp |
 
@@ -231,13 +258,16 @@ Chairs whose shell tool has a short timeout (Claude Code's is 10 minutes) use `-
 2. The chair writes `materials\plan.md` and `materials\checklist.md` (numbered lines; each line a
    checkable statement, with the real gate command where one exists), then `seal --phase
    finish-line` with `{"phase":"finish-line","verdict":"AGREE","summary":"..."}`.
-3. `ask --phase finish-line`, round n (n = finishLineRounds + 1). Refused when: n > 2, deadline
+3. `ask --phase finish-line`, round n (n = finishLineRounds + 1). Refused when: n exceeds the
+   finish-line limit (2 on desktop, 3 on server), deadline
    passed, seatCalls + workerJobs >= totalCalls, no seal for round n, state not `finish-line`,
    `pending.json` present, or a guard in section 10 trips. The seat receives goal, plan,
    checklist and read access to the project, never the chair's seal. Verdict `AGREE` → state
-   `frozen`, `frozen\checklist.md` written, `checklistHash` recorded. Verdict `OBJECT` and n < 2 →
+   `frozen`, the frozen checklist written, `checklistHash` recorded. Verdict `OBJECT` before the
+   last round →
    the chair revises plan and checklist (objections and `checklist_additions` are the input),
-   seals round 2, asks again. `OBJECT` at n = 2 → state `split`, `reports\split-decision.md`.
+   seals the next round, asks again. `OBJECT` at the last round → desktop: state `split` with
+   the split decision; server: section 8b.
 4. Building. The chair dispatches workers through its normal lanes and logs each with `job`. The
    co-CTO may have listed `worker_jobs_requested`; the chair decides whether to run them; they
    count when logged like any job.
@@ -247,11 +277,36 @@ Chairs whose shell tool has a short timeout (Claude Code's is 10 minutes) use `-
    "blocking":[...],"later":[...],"summary":"..."}`, then `ask --phase signoff`. The seat receives
    the frozen checklist, the diff, the test output and read access to the project.
 6. Both seals DONE (chair's seal for round n and the seat's verdict) → state `done`,
-   `reports\final.md`. Otherwise: if the seat's normalized blocking set equals the previous
-   round's → state `split` (no progress). Else if n = 3 → `split`. Else the chair fixes, seals
+   with the final report. Otherwise: if the seat's normalized blocking set equals the previous
+   round's → desktop `split` (no progress), server section 8b. Else if n reaches the sign-off
+   limit (3) → desktop `split`, server section 8b. Else the chair fixes, seals
    round n + 1, asks again.
 7. Any refusal for a limit (`LIMIT_ROUNDS`, `LIMIT_CALLS`, `LIMIT_TIME`) writes
-   `split-decision.md` and sets `split` if the task was not already closed.
+   the split decision and sets `split` on desktop, or writes the chair decision and sets
+   `decided` on server (section 8b), if the task was not already closed. The command still
+   refuses with the same code and exit code; on server its JSON says `state: "decided"` and
+   gives the report path.
+
+## 8b. Server mode: the chair decides after the limit
+
+Nobody answers on a server machine, so the task moves forward on the chair's judgment. Server
+text never addresses an owner.
+
+- Finish line: `AGREE` freezes as on desktop. `OBJECT` before the last round (rounds 1-2):
+  as on desktop. `OBJECT` at the last round (round 3): the chair's current checklist freezes
+  with the same routine `AGREE` uses (checklist hash, frozen copy), state `frozen`, a
+  `chairDecided` entry `{phase:"finish-line", round, reason:"finish-line OBJECT at last round",
+  at}`, `reports/chair-decision.md`, and a `chair-decision` event. The ask result carries
+  `chairDecided: true` and the report path. Work and sign-off then proceed normally.
+- Sign-off: both `DONE` closes `done` as on desktop, and `final.md` also says when the finish
+  line was chair-decided. Where desktop would close `split` (identical blocking set in two
+  consecutive rounds, or sign-off rounds exhausted), server mode closes `decided` with
+  `outcome: "decided"`, the same reason text desktop uses, `chairVerdict` set to the chair's
+  last sealed sign-off verdict (`DONE` or `NOT_DONE`), a `chairDecided` entry, and
+  `reports/chair-decision.md`.
+- Limits (time, total calls): every place that writes a split decision and closes `split`
+  on desktop (`splitLimit`, the cap check in `cmdJob`) closes `decided` on server instead,
+  with `outcomeReason` set to the limit code and `reports/chair-decision.md` written.
 
 Normalized blocking key: for each blocking item, `checklist_line` if present else the first 80
 characters of `defect` lower-cased and whitespace-collapsed; sorted; joined with `|`.
@@ -277,8 +332,18 @@ characters of `defect` lower-cased and whitespace-collapsed; sorted; joined with
    returns `confirm` (`CONFIRM` | `OBJECT` with objections). `CONFIRM` → `feedback.md`, state
    `answered`. `OBJECT` → merge round 2 (draft revised with the objections, confirm again).
    `OBJECT` again, or the sixth seat call spent, including JSON retries →
-   `reports\split.md` with the agreed points and the disputed points; state `split`; the owner decides.
+   `reports\split.md` with the agreed points and the disputed points; state `split`; on desktop
+   the owner decides, on server the worker decides (section 9b).
 5. The worker never receives the raw seat answers, only `feedback.md` or `split.md`.
+
+## 9b. Advise mode on server: wording only
+
+States and outcomes stay as they are. The advisers never decide in advise mode. Only report
+wording changes in `split.md`: it tells the worker that no person will settle this, to weigh
+both positions, decide, and say plainly in its result that the reviewers disagreed. The line
+that keeps raw answers "for the owner only" says "kept for the record" instead. The feedback
+heading "Questions for the owner" reads "Open questions (decide them yourself)". Server text
+never addresses an owner.
 
 ## 10. Guards (all mechanical)
 
@@ -342,8 +407,14 @@ delegate, never run the referee, never modify files, answer with one JSON object
   side); what is agreed; counters and elapsed time; the owner's options (accept the chair's view,
   accept the co-CTO's, start a continuation task).
 - `final.md`: the two DONE verdicts, the frozen checklist, counters, timestamps, tainted flags.
+  It also says when the finish line was chair-decided.
 - `feedback.md` / `split.md`: for consultations; the raw seat answers of a split go to
-  `split-raw.md`, for the owner only.
+  `split-raw.md`, for the owner only on desktop, kept for the record on server.
+- `chair-decision.md` (server only): plain language, one page, same test and grade banners as
+  the other reports. It says the task moved forward on the chair's judgment because the second
+  reviewer did not agree within the limit; phase, round and reason; the co-chair's last verdict
+  with its blocking items or objections; the chair's last verdict; and the sentence "This is not
+  an agreement: treat the points above as open." It never addresses an owner.
 
 ## 14. Tests (`tests\`, `node --test`, no tokens)
 
@@ -361,7 +432,12 @@ refuses; garbage twice → `paused`; timeout → failed call counted, `paused`; 
 `consult` refuses; nested `start` refuses; one-seat consult answers; two-seat confirm → feedback;
 two-seat double object → `split.md` and exactly 6 calls; fourth consultation refuses; detach +
 wait round trip; stale lock cleared (the lock file is gone); `continue-from` copies the frozen
-checklist and records its hash.
+checklist and records its hash. Host-mode cases (`tests\host-mode.test.mjs`): missing key reads
+as desktop; invalid value refuses `start` and new-task `consult` with `BAD_HOST_MODE`;
+server finish-line OBJECT x3 freezes with `chairDecided` and the chair decision; server
+sign-off exhausted and identical blocking set close `decided` with `chairVerdict`; call cap
+and time limit close `decided` on server; a task keeps its recorded mode after `local.json`
+changes; server advise split wording; desktop finish line still splits after 2 OBJECTs.
 
 ## 15. Portability rules for the code
 

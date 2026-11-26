@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ensureDir, writeUtf8 } from './fsx.mjs';
-import { ledgerRoot, readVersion } from './paths.mjs';
+import { SERVER_HOST_NOTE, hostModeFromLocal, ledgerRoot, readVersion } from './paths.mjs';
 import { gradeOf, pickAssessor, pickPair } from './select.mjs';
 import { assessorStatus, binaryForSeat, eligibility, getAssessor, getSeat, isAvailable, loadSeatsJson, localDisabled, machineFacts, routeInfo } from './seats.mjs';
 import { loadIndex, loadLedger } from './ledger.mjs';
@@ -97,12 +97,25 @@ export function cmdDoctor() {
     }
   }
 
+  const rawHost = hostModeFromLocal();
+  const hostValid = rawHost === 'desktop' || rawHost === 'server';
+  const hostMode = rawHost;
+  const hostModeDisplay = rawHost === 'server'
+    ? SERVER_HOST_NOTE
+    : (hostValid ? 'desktop' : `invalid host mode ${JSON.stringify(rawHost)}`);
+  const hostModeProblem = hostValid
+    ? null
+    : `Unknown host mode ${JSON.stringify(rawHost)}; run the team installer again.`;
+
   return {
     ok: nodeOk && writable,
     version: readVersion(),
     node,
     nodeOk,
     ledger: { path: root, writable },
+    hostMode,
+    hostModeDisplay,
+    hostModeProblem,
     seats,
     assessors,
     assessor,

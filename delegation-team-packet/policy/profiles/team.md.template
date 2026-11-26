@@ -6,6 +6,7 @@ Re-running the installer refreshes it.
 
 ## This machine
 
+- Mode: {{MODE}}
 - OS: {{OS}}
 - Home: `{{HOME}}`
 - Claude Code: {{CLAUDE_VERSION}}

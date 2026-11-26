@@ -56,7 +56,10 @@ list); `-ClearUnavailable` / `--clear-unavailable` (empties the saved list first
 `--repos <dir>` (the folder that holds the person's repositories, instead of the detected one;
 kept for later runs); `-Credentials <folder>` / `--credentials <folder>` and `-Knowledge <folder>` /
 `--knowledge <folder>` (remember the two personal folders; sh also accepts `--credentials=...` and
-`--knowledge=...`). The long names work for both installers.
+`--knowledge=...`); `--mode desktop|server` or `--mode=<value>` (choose the host mode). The long
+names work for both installers. Mode values are case-sensitive. For a missing or invalid value,
+both installers exit 1 with `Invalid --mode value: '<value>' (expected desktop or server)` before
+changing anything.
 
 Owned locations (the only places the installer ever writes or deletes; `<home>` = the target root,
 made canonical by resolving symlinks and junctions): `<home>/.config/delegate-skills/` (the
@@ -115,6 +118,9 @@ Steps, in order:
    newer than this one, stop with "A newer packet (<installed>) is installed; this one is <this>.
    Use the newer packet, or run again with --allow-downgrade." (exit 2). An unreadable receipt is
    reported and treated as absent.
+   Use the mode given with `--mode`, otherwise the `hostMode` of this home's receipt, otherwise
+   `desktop`. An older receipt without `hostMode` defaults to desktop. Pass `--mode desktop` to
+   switch a server install back.
 4. **Settings.** `SETTINGS = <home>/.config/delegate-skills/team-settings.json` holds
    `{ "unavailable": [ "<model id>", ... ] }` (ids match `[A-Za-z0-9._-]+`). The saved list is
    only ever emptied by `--clear-unavailable`; nothing else may drop an exclusion. The file is
@@ -187,20 +193,22 @@ Steps, in order:
      changes to kept (the profile keeps the original discovery wording); the receipt records kept.
 5. **Run the machine check** (only when Node 18+ is present): `node <packet>/setup/resolve.mjs
    --packet <packet> --home <home> --settings <file with the new list> --out <new temp folder>
-   [--repos <dir>]` (`--repos` when given, else the folder the previous receipt recorded)
+   --mode <desktop|server> [--repos <dir>]` (`--repos` when given, else the folder the previous receipt recorded)
    with the detected tools in the environment (section 3.2). It decides the lane file, the seat
    file (`local.json`) and the consensus grade, and writes them as text files (section 3.3). It
    succeeded when it exited 0 and every required output exists (`lanes.json` too whenever codex,
    cursor-agent or muse was found).
 6. **Degraded mode** (no Node, or the machine check failed; print its first output line):
    - on a machine that has a previous install of ours: every file of the runtime (with the two
-     consensus skill copies), the relays, the lane file and `local.json` that the previous receipt
-     lists is kept exactly as it is (plan
-     `KEEP (machine check failed)` or `KEEP (needs Node 18+)`; no update, no removal), so earlier
-     restrictions stay in force;
-   - on a fresh install without Node: no runtime, no relays, no lane file (`SKIP (needs Node 18+)`);
+     consensus skill copies), the relays and the lane file that the previous receipt lists is kept
+     exactly as it is (plan `KEEP (machine check failed)` or `KEEP (needs Node 18+)`). Keep the
+     existing `local.json` marks and update only `hostMode` when it is missing or changes. Leave
+     unreadable settings disabled. If the settings file is missing, write disabled settings;
+   - on a fresh install without Node: no referee program, no relays, no lane file
+     (`SKIP (needs Node 18+)`). Write `local.json` with `hostMode`, `"disabled": "needs Node 18+"`
+     and `"seats": {}`;
    - on a fresh install with Node but a failed check: the runtime is installed with `local.json`
-     `{ "disabled": "machine check failed: <first line>", "seats": {} }` (written by a JSON
+     `{ "hostMode": "<mode>", "disabled": "machine check failed: <first line>", "seats": {} }` (written by a JSON
      serializer, so any first line stays valid JSON), which switches consensus
      off in the referee until the installer runs again successfully; relays and the lane file are
      `SKIP (machine check failed: <first line>)`.
@@ -218,9 +226,10 @@ Steps, in order:
      (known and below 2.1.284: 4.6, otherwise 5.5). Both sets use the same installed target names,
      so ownership, receipts and uninstall stay as they are.
    - `CLAUDE_MD = <home>/.claude/CLAUDE.md`: the section rendered from `claude/CLAUDE-bootstrap.md`.
-   - `RUNTIME_DIR = <home>/.config/delegate-skills/consensus/` (Node 18+ only): the packet's
-     `consensus/` without `tests/` and `skill/`, plus `local.json` (from the machine check, or the
-     disabled one of step 6). `LEDGER = <home>/.config/delegate-skills/consensus-ledger/` is created.
+   - `RUNTIME_DIR = <home>/.config/delegate-skills/consensus/`: `local.json` comes from the machine
+     check or step 6. With Node 18+, the runtime also contains the packet's `consensus/` without
+     `tests/` and `skill/`, and `LEDGER = <home>/.config/delegate-skills/consensus-ledger/` is created
+     when the referee is installed.
    - Skill copies with the runtime: `<home>/.claude/skills/consensus/SKILL.md` and
      `<home>/.agents/skills/consensus/SKILL.md`, rendered from `consensus/skill/consensus/SKILL.md`.
    - Relay skills (Node 18+ and a successful check only): `codex-delegate` when `codex` was found,
@@ -238,7 +247,10 @@ Steps, in order:
    touched. `CLAUDE.md` is never pruned.
 9. **Render placeholders.** `{{SHARED_ROOT}}`, `{{PROFILE}}`, `{{REFEREE}}`, `{{LEDGER}}` and the
    profile's date, OS, home, packet and tool versions as v1 (backslashes become forward slashes
-   on macOS and Linux); `{{REPOS}}` and `{{OTHER_TOOLS}}` = the machine check's `repos.md` and
+   on macOS and Linux). The profile's `## This machine` section gets one line for `{{MODE}}`:
+   `- Mode: desktop (a person works in the chat)` or
+   `- Mode: server (no person in the chat; follow "Desktop mode and server mode" in POLICY.md)`.
+   `{{REPOS}}` and `{{OTHER_TOOLS}}` = the machine check's `repos.md` and
    `tools.md` (in degraded mode `- Repositories: <--repos folder>` or `- Repositories: not detected
    (the model check did not run)`, and `- not checked (the model check did not run)`);
    `{{ROUTES}}`, `{{LANES}}`, `{{CONSENSUS}}` = the machine check's
@@ -255,7 +267,8 @@ Steps, in order:
    the previous reviewer setup is kept (machine check failed)`. Any `{{` left in a rendered file is
    an error (exit 1).
 10. **CLAUDE.md splice rule.** As v1.
-11. **Plan.** One line per target: `CREATE`, `UPDATE`, `UNCHANGED`, `REMOVE`, `KEEP (<why>)`, or
+11. **Plan.** Print `Mode: desktop` or `Mode: server`, including on `--dry-run`. One line per
+    target: `CREATE`, `UPDATE`, `UNCHANGED`, `REMOVE`, `KEEP (<why>)`, or
     `SKIP (<reason>)`; then exactly one version line ("Upgrading from X to Y", "Re-installing Y",
     "Downgrading from X to Y (allowed)" or "New install of Y"); the detected tools; the models
     declared unavailable; and the machine check's `summary.txt` lines. The profile's date line is
@@ -266,7 +279,7 @@ Steps, in order:
     stop with exit 1 before any file is written or deleted. Then write (byte copies; rendered files
     UTF-8 without BOM with LF), delete the `REMOVE` files, remove owned folders left empty, and
     re-hash every written file (mismatch: exit 1; backups stay). Receipt (schema 2): `{ schema: 2,
-    packetVersion, previousPacketVersion, installedAt, platform, home, tools: {...}, unavailable:
+    packetVersion, previousPacketVersion, installedAt, platform, home, hostMode, tools: {...}, unavailable:
     [...], refresh: { status, reason, at }, consensus, lanes, repos: { path, count } | null,
     folders: { credentials: { path, source } | null, knowledge: { path, source } | null },
     relays: [names], files: {
@@ -284,7 +297,7 @@ Steps, in order:
     and `profile` fields in older receipts.
 13. **Post-install check.** When the runtime is installed, run `node <REFEREE> doctor --human`
     (no tokens) and print it.
-14. **Summary**, in plain words: the model check's result on its own line ("Model check: done",
+14. **Summary**, in plain words: `Mode: desktop` or `Mode: server` and the model check's result on its own line ("Model check: done",
     "Model check: failed (<reason>); your previous reviewer and lane setup is kept unchanged", or
     "Model check: failed (<reason>); reviews are off until it succeeds", or "Model check: skipped
     (no Node 18+)"); then (since 2026.11.10-1) the Muse contributor lines, from
@@ -320,7 +333,7 @@ Steps, in order:
 17. **Exit codes:** 0 success; 2 precondition (Claude Code missing, damaged packet, ambiguous
     `CLAUDE.md`, nothing to uninstall, a newer packet installed, a receipt of another home or of
     no home at uninstall, an unreadable settings file, a control file behind an outside link);
-    1 unexpected error or a failed self-test.
+    1 invalid or missing `--mode` value, unexpected error or a failed self-test.
 18. **Never:** read or copy credentials, write or delete outside the owned locations, run any agent
     with a real prompt, change account settings, write a hook into any tool's settings, or require
     administrator rights. The only network
@@ -340,7 +353,8 @@ GPT-6.2 Sol, Opus 5.5, Opus 5, Grok 4.7, GPT-6.1 Sol (reserve), GPT-6 Sol, Sonne
 GPT-5.6 Sol. Both GPT CTO seats use xhigh, the read-only sandbox and standard service tier;
 GPT-6.1 keeps its id, eligibility and tier 1 grade for existing ledgers and unavailable marks.
 
-`node resolve.mjs --packet <dir> --home <dir> --settings <file> --out <dir>`. Environment set by
+`node resolve.mjs --packet <dir> --home <dir> --settings <file> --out <dir> [--mode <desktop|server>]`.
+The machine check defaults to desktop if called directly without `--mode`. Environment set by
 the installer: `TEAM_CLAUDE`, `TEAM_CODEX`, `TEAM_CURSOR`, `TEAM_MUSE` (the detected launcher path,
 empty when not found) and `TEAM_CLAUDE_VERSION`, `TEAM_CODEX_VERSION`, `TEAM_CURSOR_VERSION`,
 `TEAM_MUSE_VERSION` (the `x.y.z` found, empty when unknown); `CODEX_HOME` (Codex's own variable)
@@ -363,7 +377,7 @@ What it discovers, without spending tokens:
 
 ### 3.3 Machine check outputs (files in `--out`; UTF-8, LF, each ending with a newline)
 
-- `local.json` (always): `{ "seats": { "<id>": { "unavailable": "<reason>" } | { "unverified":
+- `local.json` (always): `{ "hostMode": "desktop" | "server", "seats": { "<id>": { "unavailable": "<reason>" } | { "unverified":
   "<reason>" } } }`. Unavailable: a Codex seat whose (model, effort) the known Codex list does not
   offer; a Cursor seat whose model the known Cursor list lacks; any seat whose model is declared
   unavailable. Unverified: every Claude seat not declared unavailable ("Claude plan access to
@@ -542,8 +556,9 @@ sentence above, and the tools line shows `Claude Code: not found` when it is mis
 
 ## 4. Platform notes
 
-As v1, plus: the installers never parse JSON in bash beyond the receipt's line format; everything
-model-dependent is decided by the machine check and read back as text. Canonical paths: PowerShell
+The Bash installer recovers the mode from the receipt's line format. In degraded mode it edits the
+top-level `hostMode` string in `local.json` and keeps the existing marks. The machine check decides
+everything model-dependent and the installers read its outputs as text. Canonical paths: PowerShell
 `[System.IO.Path]::GetFullPath` plus resolving reparse points of existing parents; bash `cd -P` /
 `pwd -P` on the existing parent. Resolver outputs are UTF-8 with LF line endings.
 
@@ -563,7 +578,8 @@ FAIL line per scenario and installer and exits non-zero on any failure.
 
 1. `--dry-run`: every target `CREATE`, the two unrelated `CLAUDE.md` sections untouched, nothing written.
 2. install: all targets created; receipt schema 2 lists them; `CLAUDE.md` has the section plus the
-   two original sections; `profiles/team.md` has no `{{`.
+   two original sections; `profiles/team.md` has no `{{`. With no mode flag, the receipt and
+   `local.json` record desktop, the profile has the desktop mode line, and the plan and summary say `Mode: desktop`.
 3. install again: every target `UNCHANGED`, no new backup folder.
 4. hand edit inside `## Notes`, install again: section refreshed, hand edit kept.
 5. `--uninstall`: owned files gone (including `local.json`, the relays and the settings file),
@@ -741,6 +757,13 @@ Muse privacy scenarios (since 2026.11.10-1; both installers):
 
 70. Codex offers GPT-6.1 Sol but not GPT-6.2 Sol: both review/implement lanes use gpt-6.1-sol
     high marked as fallback, and the standard-grade consensus summary names the reserve seat.
+71. Fresh `--mode server`: the receipt and `local.json` record server, the profile has the server
+    mode line, and the plan and summary name server mode.
+72. Repeat without `--mode` keeps server mode. `--dry-run --mode=desktop` plans the switch without
+    changing the home. `--mode desktop` switches back even without Node and preserves the seat marks.
+73. `--mode bogus`, `--mode=SERVER`, `--mode=` and a missing value all exit 1 and leave the home unchanged.
+74. Fresh `--mode=server` without Node writes disabled `local.json` with the server mode.
+75. Fresh `--mode=server` when the machine check fails writes disabled `local.json` with the server mode.
 
 Every fixture sets TEAM_FOLDER_ROOTS to `none` (empty can be lost through PowerShell) unless it
 supplies its own fake root. Folder unit tests (`node --test` in setup) also cover ranking,

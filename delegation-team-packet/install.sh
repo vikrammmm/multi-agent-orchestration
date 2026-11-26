@@ -17,6 +17,7 @@ usage() {
     printf '  --yes                  Skip confirmation prompt\n'
     printf '  --credentials <folder> Remember the credentials folder\n'
     printf '  --knowledge <folder>   Remember the SecondBrain knowledge base\n'
+    printf '  --mode desktop|server   Remember the host mode (also --mode=<value>)\n'
     printf '  --uninstall            Remove installed files (reads the receipt)\n'
     printf '  --home <dir>           Target home directory (default: $HOME)\n'
     printf '  --self-test            Run referee and setup self-tests (no tokens)\n'
@@ -481,6 +482,39 @@ parse_settings() {
     return 0
 }
 
+# Change the top-level hostMode string without reserializing the other settings.
+# Output nothing if the value is current or the object cannot be edited.
+update_local_mode() {
+    awk -v mode="$HOST_MODE" '
+        { json = json $0 "\n" }
+        END {
+            if (!match(json, /^[[:space:]]*\{[[:space:]]*/)) exit
+            first = RLENGTH + 1
+            for (i = 1; i <= length(json); i++) {
+                c = substr(json, i, 1)
+                if (c == "\"") {
+                    if (!match(substr(json, i), /^"([^"\\]|\\.)*"/)) exit
+                    token = substr(json, i, RLENGTH)
+                    i += RLENGTH - 1
+                    if (depth == 1 && (prev == "{" || prev == ",") && token == "\"hostMode\"") {
+                        if (!match(substr(json, i + 1), /^[[:space:]]*:[[:space:]]*/)) exit
+                        start = i + RLENGTH + 1
+                        if (!match(substr(json, start), /^"([^"\\]|\\.)*"/)) exit
+                        if (substr(json, start, RLENGTH) != "\"" mode "\"")
+                            printf "%s\"%s\"%s", substr(json, 1, start - 1), mode, substr(json, start + RLENGTH)
+                        exit
+                    }
+                } else if (c == "{" || c == "[") depth++
+                else if (c == "}" || c == "]") depth--
+                if (c !~ /[[:space:]]/) prev = c
+            }
+            c = substr(json, first, 1)
+            if (depth == 0 && (c == "\"" || c == "}"))
+                printf "%s\"hostMode\": \"%s\"%s%s", substr(json, 1, first - 1), mode, (c == "\"" ? ", " : ""), substr(json, first)
+        }
+    ' "$1"
+}
+
 # backup_file FILE → copy to BACKUP_DIR, verify hash; return 1 on failure
 # BACKUP_DIR must exist before calling
 backup_file() {
@@ -563,7 +597,7 @@ render_template() {
     printf '%s\n' "$CONSENSUS_TEXT" > "$consensus_f"
     printf '%s\n' "$REPOS_TEXT"     > "$repos_f"
     printf '%s\n' "$TOOLS_TEXT"     > "$tools_f"
-    local e_shared e_referee e_ledger e_home e_pkt e_date e_os
+    local e_shared e_referee e_ledger e_home e_pkt e_date e_os e_mode
     local e_claude e_node e_codex e_cursor e_muse e_ladder e_entry
     e_entry=$(sed_esc "$ENTRY_TEXT")
     e_ladder=$(sed_esc "$LADDER_TEXT")
@@ -571,6 +605,7 @@ render_template() {
     e_ledger=$(sed_esc "$LEDGER_DIR"); e_home=$(sed_esc "$TARGET_HOME")
     e_pkt=$(sed_esc "$PACKET_VERSION"); e_date=$(sed_esc "$INSTALL_DATE")
     e_os=$(sed_esc "$OS_NAME"); e_claude=$(sed_esc "$CLAUDE_VER_DISPLAY")
+    e_mode=$(sed_esc "$MODE_DESCRIPTION")
     e_node=$(sed_esc "$NODE_VER_DISPLAY"); e_codex=$(sed_esc "$CODEX_VER_DISPLAY")
     e_cursor=$(sed_esc "$CURSOR_VER_DISPLAY"); e_muse=$(sed_esc "$MUSE_VER_DISPLAY")
     sed \
@@ -580,6 +615,7 @@ render_template() {
         -e "s|{{LEDGER}}|${e_ledger}|g" \
         -e "s|{{DATE}}|${e_date}|g" \
         -e "s|{{OS}}|${e_os}|g" \
+        -e "s|{{MODE}}|${e_mode}|g" \
         -e "s|{{HOME}}|${e_home}|g" \
         -e "s|{{PACKET_VERSION}}|${e_pkt}|g" \
         -e "s|{{CLAUDE_VERSION}}|${e_claude}|g" \
@@ -639,6 +675,7 @@ OPT_CLEAR_UNAVAILABLE=0
 OPT_REPOS=""
 OPT_CREDENTIALS=""
 OPT_KNOWLEDGE=""
+OPT_MODE=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -657,6 +694,14 @@ while [ $# -gt 0 ]; do
         --credentials=*)     OPT_CREDENTIALS="${1#--credentials=}" ;;
         --knowledge)         shift; OPT_KNOWLEDGE="${1:-}" ;;
         --knowledge=*)       OPT_KNOWLEDGE="${1#--knowledge=}" ;;
+        --mode|--mode=*)
+            if [ "$1" = "--mode" ]; then shift; OPT_MODE="${1:-}"
+            else OPT_MODE="${1#--mode=}"; fi
+            case "$OPT_MODE" in
+                desktop|server) ;;
+                *) die "Invalid --mode value: '$OPT_MODE' (expected desktop or server)" ;;
+            esac
+            ;;
         --clear-unavailable) OPT_CLEAR_UNAVAILABLE=1 ;;
         --help|-h)           usage; exit 0 ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 1 ;;
@@ -923,6 +968,7 @@ PREV_UNAVAILABLE=""
 PREV_CONSENSUS_VAL="null"
 PREV_LANES_VAL="null"
 PREV_REPOS=""
+PREV_MODE=""
 PREV_BACKUP_DIR_JSON='""'
 PREV_FILES_TMP=$(mktemp)
 
@@ -945,6 +991,7 @@ if [ -f "$RECEIPT_FILE" ]; then
     fi
 
     if [ "$PREV_RECEIPT_OURS" = "1" ]; then
+        PREV_MODE=$(sed -n -E 's/^[[:space:]]*"hostMode"[[:space:]]*:[[:space:]]*"(desktop|server)"[[:space:]]*,?[[:space:]]*$/\1/p' "$RECEIPT_FILE" | head -1)
         _previous_backup=$(sed -n 's/^[[:space:]]*"backupDir"[[:space:]]*:[[:space:]]*//p' "$RECEIPT_FILE" | head -1 | sed 's/,[[:space:]]*$//')
         [ -n "$_previous_backup" ] && PREV_BACKUP_DIR_JSON="$_previous_backup"
         # Parse files list
@@ -1034,6 +1081,11 @@ fi
 # ─── step 5: machine check ───────────────────────────────────────────────────
 
 REPOS_ARG="${OPT_REPOS:-$PREV_REPOS}"
+HOST_MODE="${OPT_MODE:-${PREV_MODE:-desktop}}"
+case "$HOST_MODE" in
+    server) MODE_DESCRIPTION='server (no person in the chat; follow "Desktop mode and server mode" in POLICY.md)' ;;
+    desktop) MODE_DESCRIPTION='desktop (a person works in the chat)' ;;
+esac
 
 
 # A folder needs native separators in the receipt; unlike tool_for_node, never try executable siblings.
@@ -1179,7 +1231,7 @@ if [ "$RUNTIME_AVAILABLE" = "1" ]; then
     printf '%s' "$MUSE_VER"   | grep -q '^[0-9]' && _tm_version="$MUSE_VER"
 
     _check_exit=0
-    set -- --packet "$SCRIPT_DIR" --home "$TARGET_HOME" --settings "$SETTINGS_TMP" --out "$CHECK_OUTDIR"
+    set -- --packet "$SCRIPT_DIR" --home "$TARGET_HOME" --settings "$SETTINGS_TMP" --out "$CHECK_OUTDIR" --mode "$HOST_MODE"
     [ -n "$REPOS_ARG" ] && set -- "$@" --repos "$REPOS_ARG"
     TEAM_CLAUDE="$(tool_for_node "$TOOL_CLAUDE")" \
     TEAM_CODEX="$(tool_for_node "${TOOL_CODEX:-}")" \
@@ -1325,12 +1377,17 @@ if [ "$RUNTIME_INSTALL" = "1" ] && [ -f "$SCRIPT_DIR/consensus/skill/consensus/S
 fi
 render_template "$SCRIPT_DIR/policy/profiles/team.md.template" "$TMP_PROFILE" 0
 
-# Render local.json for disabled mode (fresh degraded with Node)
+# Keep existing marks in degraded mode, or write disabled settings if none exist.
 TMP_LOCAL_JSON=""
-if [ "$RUNTIME_INSTALL" = "1" ] && [ "$CHECK_SUCCESS" = "0" ]; then
+if [ "$CHECK_SUCCESS" = "0" ] && is_owned_inside "$LOCAL_JSON"; then
     TMP_LOCAL_JSON=$(mktemp)
-    _disabled_reason="machine check failed: $CHECK_FIRST_LINE"
-    printf '{"disabled":"%s","seats":{}}\n' "$(json_escape "$_disabled_reason")" > "$TMP_LOCAL_JSON"
+    if [ "$KEEP_PREVIOUS" = "1" ] && [ -f "$LOCAL_JSON" ]; then
+        update_local_mode "$LOCAL_JSON" > "$TMP_LOCAL_JSON"
+    else
+        _disabled_reason="$DEGRADED_REASON"
+        [ "$RUNTIME_AVAILABLE" = "0" ] && _disabled_reason="needs Node 18+"
+        printf '{"hostMode":"%s","disabled":"%s","seats":{}}\n' "$HOST_MODE" "$(json_escape "$_disabled_reason")" > "$TMP_LOCAL_JSON"
+    fi
 fi
 
 # ─── step 7/8: build plan (targets + prune) ──────────────────────────────────
@@ -1439,6 +1496,12 @@ printf '%-24s  %s (delegation section)\n' "$_codex_label" "$CODEX_AGENTS" >> "$P
 [ "$CODEX_ACTION" = UPDATE ] && printf '%s\n' "$CODEX_AGENTS" >> "$BACKUP_TMP"
 
 # Runtime + local.json
+if [ "$CHECK_SUCCESS" = "1" ]; then
+    add_target "$CHECK_OUTDIR/local.json" "$LOCAL_JSON"
+elif [ -n "$TMP_LOCAL_JSON" ] && [ -s "$TMP_LOCAL_JSON" ]; then
+    add_target "$TMP_LOCAL_JSON" "$LOCAL_JSON"
+fi
+
 if [ "$RUNTIME_INSTALL" = "1" ]; then
     # Consensus files (except tests/ and skill/)
     while IFS= read -r _csrc; do
@@ -1448,27 +1511,6 @@ if [ "$RUNTIME_INSTALL" = "1" ]; then
         [ "$_cdst" = "$LOCAL_JSON" ] && continue  # local.json handled separately
         add_target "$_csrc" "$_cdst"
     done < <(find "$SCRIPT_DIR/consensus" -type f | sort)
-
-    # local.json
-    printf '%s\n' "$LOCAL_JSON" >> "$CURRENT_TARGETS"
-    if [ "$CHECK_SUCCESS" = "1" ]; then
-        _lj_src="$CHECK_OUTDIR/local.json"
-    else
-        _lj_src="$TMP_LOCAL_JSON"
-    fi
-    if ! is_owned_inside "$LOCAL_JSON"; then
-        printf '%-24s  %s\n' "SKIP (a link leads outside the owned folders)" "$LOCAL_JSON" >> "$PLAN_TMP"
-    elif [ -f "$_lj_src" ]; then
-        _lj_h=$(hash_file "$_lj_src")
-        _lj_st=$(file_status "$LOCAL_JSON" "$_lj_h")
-        printf '%-24s  %s\n' "$_lj_st" "$LOCAL_JSON" >> "$PLAN_TMP"
-        if [ "$_lj_st" != "UNCHANGED" ]; then
-            [ -f "$LOCAL_JSON" ] && printf '%s\n' "$LOCAL_JSON" >> "$BACKUP_TMP"
-            printf 'COPY\t%s\t%s\t%s\n' "$_lj_src" "$LOCAL_JSON" "$_lj_h" >> "$APPLY_TMP"
-        else
-            printf 'UNCHANGED\t%s\t%s\t%s\n' "$_lj_src" "$LOCAL_JSON" "$_lj_h" >> "$APPLY_TMP"
-        fi
-    fi
 
     # Consensus skill copies
     if [ -f "$SCRIPT_DIR/consensus/skill/consensus/SKILL.md" ] && [ -s "$TMP_SKILL" ]; then
@@ -1494,13 +1536,14 @@ if [ "$RUNTIME_INSTALL" = "1" ]; then
     _ledger_st="CREATE"; [ -d "$LEDGER_DIR" ] && _ledger_st="UNCHANGED"
     printf '%-24s  %s  (ledger directory)\n' "$_ledger_st" "$LEDGER_DIR" >> "$PLAN_TMP"
 elif [ "$KEEP_PREVIOUS" = "1" ]; then
-    # Keep every runtime/local.json file from previous receipt
+    # Keep runtime files that are not being updated.
     _keep_reason="machine check failed"
     [ "$RUNTIME_AVAILABLE" = "0" ] && _keep_reason="needs Node 18+"
     _keep_label="KEEP (${_keep_reason})"
     while IFS= read -r _entry; do
         [ -z "$_entry" ] && continue
         _fh="${_entry%%	*}"; _fp="${_entry#*	}"
+        if [ "$_fp" = "$LOCAL_JSON" ] && [ -n "$TMP_LOCAL_JSON" ] && [ -s "$TMP_LOCAL_JSON" ]; then continue; fi
         case "$_fp" in
             "${RUNTIME_DIR}/"*|"${SKILLS_CLAUDE}/consensus/"*|"${SKILLS_AGENTS}/consensus/"*)
                 is_owned_inside "$_fp" || continue
@@ -1687,6 +1730,7 @@ fi
 # ─── step 11: plan display ───────────────────────────────────────────────────
 
 printf '\n=== Installation plan ===\n'
+printf 'Mode: %s\n' "$HOST_MODE"
 cat "$PLAN_TMP"
 
 # Version line
@@ -1730,7 +1774,7 @@ fi
 if [ "$OPT_DRY_RUN" = "1" ]; then
     install_ladder
     rm -f "$TMP_BOOTSTRAP" "$TMP_SKILL" "$TMP_PROFILE" "$PLAN_TMP" "$BACKUP_TMP" \
-          "$APPLY_TMP" "$KEEP_TMP" "$CURRENT_TARGETS" "$RECEIPT_FILES_TMP" "$SETTINGS_TMP"
+          "$APPLY_TMP" "$KEEP_TMP" "$CURRENT_TARGETS" "$RECEIPT_FILES_TMP" "$SETTINGS_TMP" "$TMP_LOCAL_JSON"
     [ -n "$CHECK_OUTDIR" ] && rm -rf "$CHECK_OUTDIR"
     printf '\n(dry-run: nothing written)\n'
     exit 0
@@ -1961,6 +2005,7 @@ mkdir -p "$(dirname "$RECEIPT_FILE")"
     printf '  "installedAt": "%s",\n'           "$(json_escape "$INSTALL_DATE")"
     printf '  "platform": "%s",\n'              "$(json_escape "$OS_NAME")"
     printf '  "home": "%s",\n'                  "$(json_escape "$TARGET_HOME")"
+    printf '  "hostMode": "%s",\n'              "$HOST_MODE"
     printf '  "tools": {\n'
     printf '    "claude": "%s",\n'              "$(json_escape "$CLAUDE_VER_DISPLAY")"
     printf '    "node": "%s",\n'                "$(json_escape "$NODE_VER_DISPLAY")"
@@ -2026,6 +2071,7 @@ fi
 # ─── step 14: summary ────────────────────────────────────────────────────────
 
 printf '\n=== Summary ===\n'
+printf 'Mode: %s\n' "$HOST_MODE"
 ladder_summary
 printf '%s\n' "$ENTRY_TEXT"
 case "$CODEX_REASON" in CODEX_HOME*) printf 'Add ## Delegation (shared rulebook) to %s/AGENTS.md yourself.\n' "$CODEX_HOME" ;; esac

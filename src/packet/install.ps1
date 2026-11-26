@@ -18,9 +18,24 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # ─── Double-dash argument aliases ─────────────────────────────────────────────
+$requestedMode = ''
 $i = 0
 while ($i -lt $RemainingArgs.Count) {
     $a = $RemainingArgs[$i]
+    if ($a -ceq '--mode' -or $a.StartsWith('--mode=', [StringComparison]::Ordinal)) {
+        if ($a -ceq '--mode') {
+            $i++
+            $requestedMode = if ($i -lt $RemainingArgs.Count) { $RemainingArgs[$i] } else { '' }
+        } else {
+            $requestedMode = $a.Substring('--mode='.Length)
+        }
+        if ($requestedMode -cnotin @('desktop', 'server')) {
+            [Console]::Error.WriteLine("Invalid --mode value: '$requestedMode' (expected desktop or server)")
+            exit 1
+        }
+        $i++
+        continue
+    }
     switch ($a) {
         '--dry-run'          { $DryRun          = [switch]$true }
         '--yes'              { $Yes             = [switch]$true }
@@ -42,7 +57,7 @@ while ($i -lt $RemainingArgs.Count) {
         }
         '--credentials' { $i++; if ($i -lt $RemainingArgs.Count) { $Credentials = $RemainingArgs[$i] } }
         '--knowledge' { $i++; if ($i -lt $RemainingArgs.Count) { $Knowledge = $RemainingArgs[$i] } }
-        '--help' { Write-Output 'Options: --credentials <folder> --knowledge <folder> --repos <folder> --home <dir> --yes --dry-run --uninstall'; exit 0 }
+        '--help' { Write-Output 'Options: --mode desktop|server (also --mode=<value>) --credentials <folder> --knowledge <folder> --repos <folder> --home <dir> --yes --dry-run --uninstall'; exit 0 }
     }
     $i++
 }
@@ -697,6 +712,7 @@ $AgentsDir               = Join-Path $HomeDir '.claude\agents'
 $ClaudeMd                = Join-Path $HomeDir '.claude\CLAUDE.md'
 $CodexAgentsFile         = Join-Path $HomeDir '.codex\AGENTS.md'
 $RuntimeDir              = Join-Path $HomeDir '.config\delegate-skills\consensus'
+$LocalJsonPath           = Join-Path $RuntimeDir 'local.json'
 $LedgerDir               = Join-Path $HomeDir '.config\delegate-skills\consensus-ledger'
 $LanesFile               = Join-Path $HomeDir '.config\delegate-skills\config.json'
 $SettingsFile            = Join-Path $HomeDir '.config\delegate-skills\team-settings.json'
@@ -943,6 +959,19 @@ if (Test-Path -LiteralPath $ReceiptFile -PathType Leaf) {
 
 # ─── Step 4: Settings ─────────────────────────────────────────────────────────
 
+$hostMode = 'desktop'
+if ($requestedMode) {
+    $hostMode = $requestedMode
+} elseif ($null -ne $prevReceipt -and $prevReceipt.PSObject.Properties['hostMode'] -and
+          $prevReceipt.hostMode -cin @('desktop', 'server')) {
+    $hostMode = $prevReceipt.hostMode
+}
+$modeDescription = if ($hostMode -eq 'server') {
+    'server (no person in the chat; follow "Desktop mode and server mode" in POLICY.md)'
+} else {
+    'desktop (a person works in the chat)'
+}
+
 $unavailableList = @()
 
 if (Test-Path -LiteralPath $SettingsFile -PathType Leaf) {
@@ -1138,7 +1167,7 @@ if ($nodeVersionOk) {
         try {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName  = $nodeCmd.Source
-            $psi.Arguments = '"' + $resolveMjs + '" --packet "' + $PacketRoot + '" --home "' + $CanonicalHome + '" --settings "' + $settingsTempPath + '" --out "' + $checkOutDir + '"'
+            $psi.Arguments = '"' + $resolveMjs + '" --packet "' + $PacketRoot + '" --home "' + $CanonicalHome + '" --settings "' + $settingsTempPath + '" --out "' + $checkOutDir + '" --mode ' + $hostMode
             if (-not [string]::IsNullOrWhiteSpace($reposArg)) { $psi.Arguments += ' --repos "' + $reposArg.TrimEnd('\') + '"' }
             $psi.UseShellExecute        = $false
             $psi.RedirectStandardOutput = $true
@@ -1227,15 +1256,6 @@ if ($isDegraded -and $hasPrevInstall) {
     }
 }
 
-# Disabled local.json for fresh-install-failed-check
-$disabledLocalJson = $null
-if ($isDegraded -and -not $hasPrevInstall -and $nodeVersionOk) {
-    $firstLine = if ($checkFailReason) { $checkFailReason } else { 'machine check failed' }
-    # A JSON serializer, so a reason with quotes or backslashes (a Windows path) stays valid JSON.
-    $disabledContent = [ordered]@{ disabled = "machine check failed: $firstLine"; seats = @{} } | ConvertTo-Json -Compress
-    $disabledLocalJson = $EncUtf8NoBom.GetBytes($disabledContent)
-}
-
 # ─── Steps 7-8: Compute desired targets and prune ─────────────────────────────
 
 # $desired: ordered hashtable  absolute-path -> @{ Bytes; Hash; Kind }
@@ -1300,7 +1320,34 @@ foreach ($af in @('haiku-helper.md')) {
 }
 }
 
-# Runtime consensus files
+# Runtime consensus files and local settings
+if ($checkSuccess) {
+    Add-DesiredBytes -TgtPath $LocalJsonPath -Bytes $checkLocalJsonBytes -Kind 'check-output'
+} elseif (Test-OwnedAndInside -CanonPath (Get-CanonicalPath -Path $LocalJsonPath) -HomeCanon $CanonicalHome) {
+    $local = $null
+    if ($hasPrevInstall -and (Test-Path -LiteralPath $LocalJsonPath -PathType Leaf)) {
+        try {
+            $existingLocal = (Read-Utf8 $LocalJsonPath) | ConvertFrom-Json
+            if ($existingLocal -is [PSCustomObject]) {
+                if (-not $existingLocal.PSObject.Properties['hostMode'] -or $existingLocal.hostMode -cne $hostMode) {
+                    $existingLocal | Add-Member -NotePropertyName 'hostMode' -NotePropertyValue $hostMode -Force
+                    $local = $existingLocal
+                }
+            }
+        } catch {
+            # Leave unreadable settings in place. The referee treats them as disabled.
+        }
+    } else {
+        $reason = if ($nodeVersionOk) { "machine check failed: $checkFailReason" } else { $degradedReason }
+        $local = [ordered]@{ hostMode = $hostMode; disabled = $reason; seats = @{} }
+    }
+    if ($null -ne $local) {
+        $keptFiles.Remove($LocalJsonPath)
+        $localText = ($local | ConvertTo-Json -Depth 100 -Compress) + "`n"
+        Add-DesiredBytes -TgtPath $LocalJsonPath -Bytes $EncUtf8NoBom.GetBytes($localText) -Kind 'check-output'
+    }
+}
+
 $hasRuntime = $false
 if (-not $isDegraded) {
     # Successful check: install from the packet and add local.json from the check
@@ -1308,10 +1355,9 @@ if (-not $isDegraded) {
     foreach ($f in (Get-ChildItem -LiteralPath $conSrc -Recurse -File)) {
         $rel    = $f.FullName.Substring($conSrc.Length).TrimStart('\','/')
         $topDir = ($rel -split '[\\\/]')[0]
-        if ($topDir -eq 'tests' -or $topDir -eq 'skill' -or $rel -eq 'BUILD-BRIEF.txt') { continue }
+        if ($topDir -eq 'tests' -or $topDir -eq 'skill' -or $rel -in @('BUILD-BRIEF.txt', 'local.json')) { continue }
         Add-Desired -TgtPath (Join-Path $RuntimeDir $rel) -SrcPath $f.FullName -Kind 'copy'
     }
-    Add-DesiredBytes -TgtPath (Join-Path $RuntimeDir 'local.json') -Bytes $checkLocalJsonBytes -Kind 'check-output'
     $hasRuntime = $true
 } elseif (-not $nodeVersionOk) {
     # No Node: SKIP all runtime (handled in plan)
@@ -1323,10 +1369,9 @@ if (-not $isDegraded) {
         foreach ($f in (Get-ChildItem -LiteralPath $conSrc -Recurse -File)) {
             $rel    = $f.FullName.Substring($conSrc.Length).TrimStart('\','/')
             $topDir = ($rel -split '[\\\/]')[0]
-            if ($topDir -eq 'tests' -or $topDir -eq 'skill' -or $rel -eq 'BUILD-BRIEF.txt') { continue }
+            if ($topDir -eq 'tests' -or $topDir -eq 'skill' -or $rel -in @('BUILD-BRIEF.txt', 'local.json')) { continue }
             Add-Desired -TgtPath (Join-Path $RuntimeDir $rel) -SrcPath $f.FullName -Kind 'copy'
         }
-        Add-DesiredBytes -TgtPath (Join-Path $RuntimeDir 'local.json') -Bytes $disabledLocalJson -Kind 'check-output'
         $hasRuntime = $true
     }
     # else: previous install kept (keptFiles), don't add to desired
@@ -1423,6 +1468,7 @@ $renderVars = @{
     'LEDGER'          = ($LedgerDir   -replace '\\','/')
     'DATE'            = [System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     'OS'              = 'Windows'
+    'MODE'            = $modeDescription
     'HOME'            = ($HomeDir     -replace '\\','/')
     'PACKET_VERSION'  = $PacketVersion
     'CLAUDE_VERSION'  = if ($hasClaude) { $claudeVersion } else { 'not found' }
@@ -1628,6 +1674,7 @@ if (-not $nodeVersionOk) {
 
 Write-Output ''
 Write-Output '--- Plan ---'
+Write-Output "Mode: $hostMode"
 foreach ($item in $planItems) {
     switch ($item.Action) {
         'SKIP'   { Write-Output ("  SKIP ({0}): {1}"     -f $item.SkipReason, $item.Label) }
@@ -1883,6 +1930,7 @@ $receiptObj = [ordered]@{
     installedAt           = [System.DateTime]::UtcNow.ToString('o')
     platform              = 'windows'
     home                  = $CanonicalHome
+    hostMode              = $hostMode
     tools                 = [ordered]@{
         claude = if ($hasClaude) { $claudeVersion } else { 'not found' }
         node   = if ($null -eq $nodeVersion)  { 'not installed' } else { $nodeVersion  }
@@ -1953,6 +2001,7 @@ $skipped   = @($planItems | Where-Object { $_.Action -eq 'SKIP'      }).Count
 
 Write-Output ''
 Write-Output '--- Summary ---'
+Write-Output "Mode: $hostMode"
 Write-Output (Get-LadderSummary)
 Write-Output $entryText
 if ($CodexReason -like 'CODEX_HOME points to*') { Write-Output ('Add the "## Delegation (shared rulebook)" section to "{0}/AGENTS.md" yourself, pointing at {1}/POLICY.md and profiles/team.md.' -f $env:CODEX_HOME, $PolicyDir) }

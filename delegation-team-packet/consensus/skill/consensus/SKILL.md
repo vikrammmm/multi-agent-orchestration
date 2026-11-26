@@ -162,6 +162,10 @@ claude-opus-5.5` or `--seats gpt-6.2-sol` asks one CTO only. When the two CTOs c
 `reports\split.md`; hand it to the owner, who decides. The CTOs advise and review; they do not
 decide when your task is finished unless the owner asked for a sign-off.
 
+On a server machine nobody answers, so the worker never waits for a person. The chair or
+worker moves forward on the chair's judgment after the limit; the referee closes `decided`
+instead of `split`. The result must say plainly that the reviewers did not agree.
+
 ## What the referee will not do
 
 It never edits project code, never runs as a service, never retries on its own, never raises a
